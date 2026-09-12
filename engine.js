@@ -37,7 +37,10 @@ function nuevoEstado(){
     linea:{limite:0, usado:0}, ivaAcum:0, cobros:[],
     mercado:[], dd:{},
     codex:{}, maestria:{}, logros:{},
-    stats:{toques:0, noes:0, cierres:0, perdidas:0, facturado:0, despidos:0, diasJugados:0},
+    stats:{toques:0, noes:0, cierres:0, perdidas:0, facturado:0, despidos:0,
+           prospecciones:0, negociaciones:0, objeciones:0, cierresPedidos:0, maxReveal:0, maxToques:0,
+           cierresSinDescuento:0, cierresAnclaAlta:0, cierresFrios:0, hallazgos:0, referidos:0},
+    misiones:{}, objetivos:{},
     flags:{}, hist:[], diario:[],
     racha:{ultimo:null, dias:0},
     pend:null, quiebras:0
@@ -71,6 +74,37 @@ function migrar(s){
   if(nuevos.length){ s.packs=G.PACKS.slice(); s.ampliacion=nuevos; }
   s.v=SAVE_V; return s;
 }
+
+/* ================= MISIONES ================= */
+G.misionActual=function(){
+  const S=G.S;
+  const t=G.TUTORIAL.find(m=>!S.misiones[m.id]);
+  if(t) return {m:t, tipo:'tutorial', i:G.TUTORIAL.indexOf(t)+1, n:G.TUTORIAL.length};
+  const o=G.OBJETIVOS.filter(m=>!S.objetivos[m.id]);
+  if(!o.length) return null;
+  return {m:o[0], tipo:'objetivo', i:G.OBJETIVOS.length-o.length+1, n:G.OBJETIVOS.length};
+};
+G.revisarMisiones=function(){
+  const S=G.S, hechas=[];
+  // el tutorial va en orden, de una en una
+  let guard=0;
+  while(guard++<20){
+    const t=G.TUTORIAL.find(m=>!S.misiones[m.id]);
+    if(!t) break;
+    let ok=false; try{ ok=t.check(S,G); }catch(e){ ok=false; }
+    if(!ok) break;
+    S.misiones[t.id]=S.dia; G.xp(t.xp||0); if(t.cash) S.caja+=t.cash;
+    hechas.push({m:t, tipo:'tutorial'});
+  }
+  // los objetivos se cumplen cuando toque
+  G.OBJETIVOS.forEach(o=>{
+    if(S.objetivos[o.id]) return;
+    let ok=false; try{ ok=o.check(S,G); }catch(e){ ok=false; }
+    if(ok){ S.objetivos[o.id]=S.dia; G.xp(o.xp||0); hechas.push({m:o, tipo:'objetivo'}); }
+  });
+  if(hechas.length) G.guardar();
+  return hechas;
+};
 
 /* ================= DIFICULTAD ================= */
 G.dif=function(){ const S=G.S; return 1 + Math.pow(S.dia/60,0.75)*0.55 + (S.trim-1)*0.02; };
@@ -106,7 +140,9 @@ function nombrePersona(){ return pick(G.NOMBRES)+' '+pick(G.APELLIDOS); }
 let LID=1;
 function generarLead(calidad){
   const S=G.S, d=G.dif(), sec=pick(G.SECTORES), arq=pick(G.ARQUETIPOS);
-  const q=clamp(calidad + (S.attrs.marketing-3)*2 + S.repu*0.25 - (d-1)*8, 5, 98);
+  let mk=0; S.equipo.forEach(e=>{ if(e.rol==='marketing'){ mk+=e.st.ejec*1.1 + (e.extra&&e.extra.calidadUp? e.extra.calidadUp*30:0); } });
+  const q=clamp(calidad + (S.attrs.marketing-3)*2 + S.repu*0.25 + mk - (d-1)*8
+                + (S.flags.marca && S.dia-S.flags.marca>90 ? 12:0), 5, 98);
   const tam=q>70?ri(2,3):q>40?ri(1,2):1;                       // 1 micro · 2 pyme · 3 mediana
   const base=rnd(sec.tick[0], sec.tick[1]) * (tam===1?0.7:tam===2?1:1.9);
   return {
@@ -117,7 +153,7 @@ function generarLead(calidad){
     hidden:{
       dolor:round(clamp(rnd(20,95)*(q/60),5,100)),
       coste:round(base*rnd(1.4,6.5)/10)*10,
-      presupuesto:round(base*rnd(0.55,2.2)/10)*10,
+      presupuesto:round(base*rnd(0.55,2.2)/(0.86+d*0.14)/10)*10,
       urgencia:round(clamp(rnd(0,100)*(q/70),0,100)),
       decisor:Math.random()< (0.35+q/220),
       alternativa:pick(['ninguna','proveedor','interno','ninguna']),
@@ -139,19 +175,19 @@ G.canalDisponible=function(c){
   if(S.caja < costeCanal(c)) return 'Sin caja';
   return null;
 };
-function costeCanal(c){ const S=G.S; let x=c.coste; if(c.escala) x*= (1+ (S.dia/120)); return round(x); }
+function costeCanal(c){ const S=G.S; let x=c.coste; if(c.escala) x*= (1+ (S.dia/120)) * (S.cacMul||1); return round(x); }
 G.costeCanal=costeCanal;
 
 G.prospectar=function(canalId){
   const S=G.S, c=G.CANALES.find(x=>x.id===canalId);
   if(G.canalDisponible(c)) return {err:G.canalDisponible(c)};
-  S.energia-=c.energia; S.caja-=costeCanal(c); S.stats.toques++;
+  S.energia-=c.energia; S.caja-=costeCanal(c); S.stats.toques++; S.stats.prospecciones++;
   const attr=S.attrs[c.attr]||3;
   let n=ri(c.leads[0], c.leads[1]) + (attr>=7?1:0) + (Math.random()<S.repu/140?1:0);
   const rechazos = Math.round(rnd(6,18) * c.rech * G.dif());
   S.stats.noes += rechazos;
   const nuevos=[];
-  for(let i=0;i<n;i++){ const l=generarLead(rnd(c.cal[0],c.cal[1])); if(c.diferido) l.estado='tibio'; S.leads.push(l); nuevos.push(l); }
+  for(let i=0;i<n;i++){ const l=generarLead(rnd(c.cal[0],c.cal[1])); if(c.diferido) l.estado='tibio'; l.origen=c.id; S.leads.push(l); nuevos.push(l); }
   const cpt=G.aprender(c.cpt);
   G.xp(6+n*4);
   G.log(`${c.n}: ${rechazos} noes y ${n} contacto${n===1?'':'s'}.`, n?'ok':'bad');
@@ -163,7 +199,8 @@ G.abrirNeg=function(leadId){
   const S=G.S, lead=S.leads.find(l=>l.id===leadId);
   if(!lead) return null;
   if(S.energia<1) return {err:'Sin energía'};
-  S.energia--; lead.toques++; lead.ultimo=S.dia; S.stats.toques++;
+  if(S.pend) return {err:'Ya tienes una conversación abierta'};
+  S.energia--; lead.toques++; lead.ultimo=S.dia; S.stats.toques++; S.stats.negociaciones++;
   const arq=G.ARQUETIPOS.find(a=>a.id===lead.arq);
   const d=G.dif();
   const neg={
@@ -239,21 +276,23 @@ G.jugar=function(neg, opId){
   if(ctx.tipo==='apertura'){ neg.fase='descubrimiento'; }
   else if(ctx.tipo==='pregunta'){
     neg.usadas[op.id]=1;
-    if(op.rev && !neg.reveal[op.rev]){ neg.reveal[op.rev]=lead.hidden[op.rev]; r.revelado={k:op.rev, v:lead.hidden[op.rev]}; }
+    if(op.rev && !neg.reveal[op.rev]){ neg.reveal[op.rev]=lead.hidden[op.rev]; r.revelado={k:op.rev, v:lead.hidden[op.rev]};
+      S.stats.maxReveal=Math.max(S.stats.maxReveal, Object.keys(neg.reveal).length); }
     if(neg.paciencia<=1) neg.fase='propuesta';
   }
   else if(ctx.tipo==='precio'){
-    neg.precio=round(neg.precioBase*op.mul/10)*10;
+    neg.precio=round(neg.precioBase*op.mul/10)*10; neg.ancla=op.id;
     neg.fase='objeciones'; neg.pool=construirPool(neg,lead,arq); neg.objActual=neg.pool.shift();
     if(!neg.objActual) neg.fase='cierre';
   }
   else if(ctx.tipo==='objecion'){
-    if(op.price) neg.precio=round(neg.precio*(1+op.price)/10)*10;
+    if(op.price){ neg.precio=round(neg.precio*(1+op.price)/10)*10; if(op.price<0) neg.hizoDescuento=true; }
     if(op.plazo) neg.plazo=op.plazo;
     if(op.cobro) neg.plazoCobro=op.cobro;
     if(op.anticipo) neg.anticipo=op.anticipo;
     if(op.garantia) neg.garantia=true;
     if(op.prueba) neg.prueba=true;
+    S.stats.objeciones++;
     marcarMaestria(neg.objActual.id, di+dc>10);
     if(op.end==='frio'){ return cerrarNeg(neg,'frio',r); }
     neg.hechas.push(neg.objActual.id);
@@ -261,6 +300,7 @@ G.jugar=function(neg, opId){
     if(!neg.objActual || neg.paciencia<=0) neg.fase='cierre';
   }
   else if(ctx.tipo==='cierre'){
+    if(op.id!=='no_cierro') S.stats.cierresPedidos++;
     const info=Object.keys(neg.reveal).length;
     const presu=lead.hidden.presupuesto, ratio=neg.precio/Math.max(presu,1);
     let muro=0, aviso=null;
@@ -268,8 +308,8 @@ G.jugar=function(neg, opId){
     else if(ratio>1.25){ muro=-24; aviso='Estabas por encima de su presupuesto. Se puede salvar, pero es cuesta arriba.'; }
     else if(ratio<0.7){ muro=6; aviso='Has entrado muy por debajo de lo que podía pagar. Cierras, y dejas dinero encima de la mesa.'; }
     if(lead.hidden.decisor===false) muro-=14;
-    const score=neg.interes*0.60 + neg.confianza*0.36 + (S.attrs.ventas-5)*1.6 + info*2.0
-                + (S.flags.nicho?4:0) + (S.flags.proceso?3:0) + muro;
+    const score=neg.interes*0.60 + neg.confianza*0.36 + (S.attrs.ventas-5)*1.6 + info*1.6
+                + (S.flags.nicho?4:0) + (S.flags.proceso?3:0) + (S.flags.cierreUp||0) + muro;
     r.aviso=aviso;
     r.score=round(score); r.umbral=op.umbral;
     if(op.prueba){ neg.prueba=true; neg.precio=round(neg.precio*0.55/10)*10; }
@@ -317,7 +357,13 @@ function cerrarNeg(neg, res, r){
       G.log(`Has cerrado sin capacidad para entregarlo. ${cli.empresa} arranca con la satisfacción por los suelos.`,'warn');
       G.aprender('coste-oportunidad'); }
     S.clientes.push(cli); S.leads.splice(i,1);
-    S.stats.cierres++; S.repu=clamp(S.repu+1,0,92);
+    if(neg.anticipo>0){ const ant=round(cli.mensual*neg.anticipo); S.caja+=ant;
+      G.log(`Anticipo de ${fmt(ant)} € cobrado el mismo día.`,'ok'); }
+    S.stats.cierres++;
+    if(!neg.hizoDescuento) S.stats.cierresSinDescuento++;
+    if(neg.ancla==='alto') S.stats.cierresAnclaAlta++;
+    if(lead.fueFrio) S.stats.cierresFrios++;
+    if(lead.origen==='referido') S.stats.referidos++; S.repu=clamp(S.repu+1,0,92);
     G.xp(26 + Math.round(neg.precio/70));
     G.log(`Cerrado: ${lead.empresa} · ${fmt(neg.precio)} €/mes.`, 'ok');
     r.cliente=cli;
@@ -335,10 +381,13 @@ function cerrarNeg(neg, res, r){
 /* ---- seguimiento: el mecanismo que más dinero deja y menos gente usa ---- */
 G.seguir=function(leadId){
   const S=G.S, lead=S.leads.find(l=>l.id===leadId);
+  if(!lead) return {err:'Ese contacto ya no está'};
+  lead.fueFrio=true;
   if(S.energia<1) return {err:'Sin energía'};
   S.energia--; lead.toques++; lead.ultimo=S.dia; S.stats.toques++;
   const t=lead.toques;
   // la curva real: el pico está entre el 5º y el 12º contacto
+  S.stats.maxToques=Math.max(S.stats.maxToques, lead.toques+0);
   const p=clamp(0.06 + (t>=5? (t<=12? 0.10+(t-5)*0.035 : 0.16) : t*0.018) + (S.attrs.ventas-5)*0.015, 0.03, 0.62);
   G.xp(5);
   if(Math.random()<p){ lead.estado='nuevo'; G.log(`${lead.empresa} responde al toque nº ${t}.`,'ok');
@@ -359,15 +408,17 @@ function crearCliente(o, meses){
 G.capacidad=function(){
   const S=G.S;
   let cap=S.attrs.operaciones*850;                        // lo que puedes entregar tú, en € de facturación/mes
-  S.equipo.forEach(e=>{
-    if(e.rol==='entrega') cap+= e.st.ejec*1150*(e.moral/70)*outMul(e);
-    if(e.extra && e.extra.equipoBoost) cap*= (1+e.extra.equipoBoost);
-  });
+  S.equipo.forEach(e=>{ if(e.rol==='entrega') cap+= e.st.ejec*1150*(e.moral/70)*outMul(e); });
+  let boost=1; S.equipo.forEach(e=>{ if(e.extra && e.extra.equipoBoost) boost+=e.extra.equipoBoost; });
+  cap*=boost;
+  if(S.flags.cuelloBotella) cap*=0.88;
   S.empresas.forEach(x=>cap+=x.cap||0);
   return round(cap);
 };
 G.carga=function(){ return G.S.clientes.reduce((a,c)=>a+c.carga,0); };
 G.recurrente=function(){ return G.S.clientes.reduce((a,c)=>a+c.mensual,0) + G.S.empresas.reduce((a,e)=>a+(e.mensual||0),0); };
+G.recurrenteReal=function(){ return G.S.clientes.reduce((a,c)=>a+ c.mensual*(c.satisf<45? 0.5+c.satisf/90 : 1),0)
+  + G.S.empresas.reduce((a,e)=>a+(e.mensual||0),0); };
 
 /* ================= EQUIPO ================= */
 let EID=1;
@@ -402,6 +453,13 @@ function outMul(e){
   else if(r.ef.arranque) m*=1.2;
   return m;
 }
+G.indirecto=rol=>rol==='admin'||rol==='marketing';
+G.aporta=function(e){
+  if(e.rol==='admin') return '+1 energía al día y menos sustos con Hacienda';
+  if(e.rol==='marketing') return 'sube la calidad de los contactos que entran';
+  if(e.rol==='comercial') return 'trae y cierra ventas que no tocas tú';
+  return 'capacidad para entregar sin que se te caigan clientes';
+};
 G.output=function(e){
   const S=G.S, r=G.RASGOS.find(x=>x.id===e.rasgo)||{ef:{}};
   let base=0;
@@ -457,7 +515,7 @@ G.rating=function(){
   p += clamp((rec-gasto)/Math.max(gasto,1)*22, -22, 22);      // rentabilidad
   p += clamp(S.dia/12, 0, 14);                                // antigüedad
   p -= clamp(S.deuda/Math.max(rec*12,1)*40, 0, 30);           // apalancamiento
-  p -= S.flags.impagado?10:0;
+  p -= (S.flags.impagado && S.dia-S.flags.impagado<120)?10:0;
   return clamp(round(p),0,100);
 };
 G.ofertaBanco=function(prod){
@@ -509,7 +567,7 @@ G.dueDiligence=function(key, areaId){
   if(S.energia<1) return {err:'Sin energía'};
   S.caja-=coste; S.energia--;
   const hallados=t.oc.filter(o=>a.revela.indexOf(o.id)>=0 && t.descubierto.indexOf(o.id)<0);
-  hallados.forEach(o=>t.descubierto.push(o.id));
+  hallados.forEach(o=>t.descubierto.push(o.id)); S.stats.hallazgos+=hallados.length;
   G.aprender('due-diligence'); G.xp(18);
   G.log(`Due diligence ${a.n} sobre ${t.n}: ${hallados.length?hallados.length+' hallazgo(s)':'nada raro'}. ${fmt(coste)} €.`, hallados.length?'bad':'ok');
   return {ok:true, hallados, coste};
@@ -551,6 +609,12 @@ G.ofertar=function(key, importe, estructura){
   return {ok:true, bomba, mensual};
 };
 
+function apuntarCobro(importe, dia){
+  const S=G.S, y=S.cobros.find(c=>c.dia===dia);
+  if(y) y.importe=round(y.importe+importe); else S.cobros.push({importe:round(importe), dia});
+}
+G.apuntarCobro=apuntarCobro;
+
 /* ================= TICK DIARIO ================= */
 G.gastoMensual=function(){
   const S=G.S;
@@ -569,9 +633,11 @@ G.finDia=function(){
   S.cobros=S.cobros.filter(c=>{ if(c.dia<=S.dia){ S.caja+=c.importe; cobrado+=c.importe; return false;} return true; });
   // 2. facturación del día (se cobra a plazo)
   S.clientes.forEach(c=>{
-    const dia=round(c.mensual/30);
-    S.cobros.push({importe:round(dia*(1-0.21*0)), dia:S.dia+c.plazo, cli:c.id});
-    S.ivaAcum+=round(dia*0.21);
+    let dia=c.mensual/30;
+    if(c.satisf<45) dia*= 0.5 + c.satisf/90;          // discute facturas, pide descuentos, retiene pagos
+    dia=round(dia);
+    apuntarCobro(dia, S.dia + c.plazo + (c.satisf<30?30:0));
+    S.ivaAcum+=dia*0.21*S.margen;                      // IVA repercutido menos el soportado
     S.stats.facturado+=dia;
   });
   S.empresas.forEach(e=>{ S.caja+=round(e.mensual/30*0.8); });
@@ -588,7 +654,7 @@ G.finDia=function(){
   if(ratio>1.15 && S.dia%7===0){ S.moral=clamp(S.moral-3,0,100); ev.push({t:'Vais desbordados. La moral baja.',k:'bad'}); }
   // 5. fuga
   S.clientes.slice().forEach(c=>{
-    let p=Math.min(0.085, 0.0022*Math.sqrt(d)*(1+Math.pow(Math.max(0,75-c.satisf)/24,2)));
+    let p=Math.min(0.14, 0.0022*Math.sqrt(d)*(1+Math.pow(Math.max(0,75-c.satisf)/15,2)));
     if(c.meses<=0){
       if(c.satisf>=66){ c.meses=ri(9,18); c.mensual=round(c.mensual*1.03); G.aprender('nrr');
         ev.push({t:`${c.empresa} renueva y le subes un 3%.`,k:'ok'}); }
@@ -617,7 +683,9 @@ G.finDia=function(){
   });
   // 7. comerciales traen leads
   S.equipo.filter(e=>e.rol==='comercial').forEach(e=>{
-    if(Math.random() < 0.10*(e.st.ventas/6)*(e.moral/72)) S.leads.push(generarLead(rnd(30,70)));
+    const rr=G.RASGOS.find(x=>x.id===e.rasgo)||{ef:{}};
+    const mul=(rr.ef.leadMul&&e.visto?rr.ef.leadMul:1)*(S.flags.leadsMul||1);
+    if(Math.random() < 0.10*(e.st.ventas/6)*(e.moral/72)*mul) S.leads.push(generarLead(rnd(30,70)));
   });
   // 8. leads que se pudren
   S.leads.forEach(l=>{ if(S.dia-l.ultimo>18 && l.estado!=='frio'){ l.estado='frio'; } });
@@ -628,7 +696,21 @@ G.finDia=function(){
     const iva=round(S.ivaAcum); S.caja-=iva; S.ivaAcum=0;
     ev.push({t:`Liquidación de IVA: −${fmt(iva)} €. Ese dinero nunca fue tuyo.`,k:'warn'}); G.aprender('iva-no-es-tuyo');
   }
+  // 9bis. earn-outs pendientes
+  Object.keys(S.flags).forEach(k=>{
+    if(k.indexOf('earnout_')!==0) return;
+    const e=S.flags[k]; if(S.dia%30) return;
+    e.meses--;
+    if(e.meses<=0){ S.caja-=e.resta;
+      ev.push({t:`Vence el earn-out: pagas los ${fmt(e.resta)} € que quedaban.`,k:'warn'});
+      G.aprender('earn-out'); delete S.flags[k]; }
+  });
   // 10. préstamos
+  if(S.linea.usado>0){
+    S.caja-=round(S.linea.usado*0.11/365);                       // la línea cuesta mientras la usas
+    if(S.caja>G.gastoMensual()*1.5){ const dev=round(Math.min(S.linea.usado, S.caja-G.gastoMensual()*1.5));
+      S.linea.usado-=dev; S.caja-=dev; if(dev>0) G.log('Devuelves '+fmt(dev)+' € de la línea de crédito.'); }
+  }
   if(S.dia%30===0) S.prestamos.forEach(p=>{ p.restan--; S.deuda=Math.max(0,S.deuda-round(p.cuota*0.7)); });
   S.prestamos=S.prestamos.filter(p=>p.restan>0);
   // 11. evento aleatorio
@@ -655,8 +737,10 @@ G.finDia=function(){
       ev.push({t:'CAJA EN NEGATIVO y sin crédito. Tienes 30 días para remontar antes de cerrar.',k:'bad'}); }
     else if(S.dia - S.flags.enRojo > 30){ S.flags.cerrada=1; ev.push({t:'Se acabó. Cierras la empresa.',k:'bad'}); }
   }
+  if(S.caja>=0 && S.flags.cerrada) delete S.flags.cerrada;
   if(S.caja>=0 && S.flags.enRojo){ delete S.flags.enRojo; ev.push({t:'Caja otra vez en positivo. Has salido del pozo.',k:'ok'}); }
   // 15. cierre del día
+  if(S.perdidos.length>60) S.perdidos.splice(0, S.perdidos.length-60);
   S.hist.push({d:S.dia, caja:round(S.caja), rec:round(G.recurrente()), cli:S.clientes.length, eq:S.equipo.length});
   if(S.hist.length>400) S.hist.shift();
   S.dia++; S.mes=Math.ceil(S.dia/30); S.trim=Math.ceil(S.dia/90);
@@ -666,6 +750,11 @@ G.finDia=function(){
   S.moral += clamp((objetivo-S.moral)*0.11, -1.5, 3.5);
   S.moral = clamp(S.moral,0,100);
   if(S.dia%10===0) S.repu=clamp(S.repu-0.6,0,92);
+  if(S.dia%7===0){
+    const mal=S.clientes.filter(c=>c.satisf<40).length, bien=S.clientes.filter(c=>c.satisf>75).length;
+    if(mal) S.repu=clamp(S.repu - Math.min(6, mal*0.9), 0, 92);
+    else if(bien) S.repu=clamp(S.repu + Math.min(2, bien*0.3), 0, 92);
+  }
   G.xp(5);
   G.guardar();
   return {ev, cobrado, gd, dilema, conflicto, cap, car, ratio};
@@ -703,7 +792,7 @@ function aplicarEvento(e){
   if(f.fijosMul) S.fijos=round(S.fijos*f.fijosMul);
   if(f.lineaMul) S.linea.limite=round(S.linea.limite*f.lineaMul);
   if(f.bajaMayor && S.clientes.length){ S.clientes.sort((a,b)=>b.mensual-a.mensual); const c=S.clientes.shift(); S.perdidos.push(c); }
-  if(f.impago && S.cobros.length){ const c=pick(S.cobros); c.dia+=74; S.flags.impagado=1; }
+  if(f.impago && S.cobros.length){ const c=pick(S.cobros); c.dia+=74; S.flags.impagado=S.dia; }
   if(f.dimite && S.equipo.length){ const x=pick(S.equipo); S.equipo=S.equipo.filter(y=>y.id!==x.id); }
   if(f.satisfaccion && S.clientes.length){ pick(S.clientes).satisf+=f.satisfaccion; }
   if(f.leadCaliente) S.leads.push(generarLead(88));
@@ -713,6 +802,21 @@ function aplicarEvento(e){
   if(f.margen) S.margen=clamp(S.margen+f.margen,0.2,0.9);
   if(f.presionPrecio) S.clientes.forEach(c=>c.mensual=round(c.mensual*(1-f.presionPrecio/3)));
   if(f.subvencion) S.caja+=round(rnd(3000,9000)/100)*100;
+  if(f.inspeccion){ const multa=round(Math.max(900, S.stats.facturado*0.035)/100)*100;
+    const blindado=S.equipo.some(x=>x.extra&&x.extra.blindaHacienda);
+    if(blindado){ G.log('Tu contable responde el requerimiento. Sin multa.','ok'); }
+    else { S.caja-=multa; S.energia=Math.max(0,S.energia-2); G.log('Inspección: '+fmt(multa)+' € y dos días perdidos en papeles.','bad'); } }
+  if(f.cacMul){ S.cacMul=(S.cacMul||1)*f.cacMul; }
+  if(f.robaCartera && S.equipo.length && S.clientes.length){
+    const x=pick(S.equipo); S.equipo=S.equipo.filter(y=>y.id!==x.id);
+    const n=Math.max(1,Math.round(S.clientes.length*0.15));
+    for(let i=0;i<n;i++){ const c=S.clientes.pop(); if(c) S.perdidos.push(c); } }
+  if(f.candidatoTop) S.flags.candidatoTop=S.dia;
+  if(f.concurso) S.flags.concurso={importe:round(rnd(9000,26000)/500)*500, hasta:S.dia+14};
+  if(f.alianza){ S.flags.alianza=S.dia; for(let i=0;i<2;i++) S.leads.push(generarLead(rnd(55,85))); }
+  if(f.upsell && S.clientes.length){ const c=pick(S.clientes);
+    if(c.satisf>55){ const sube=round(c.mensual*0.28); c.mensual=round(c.mensual+sube);
+      G.log(c.empresa+' amplía: +'+fmt(sube)+' €/mes.','ok'); G.aprender('upsell'); } }
   if(f.cptRef) G.aprender(f.cptRef);
   G.aprender(e.cpt);
 }
@@ -724,8 +828,31 @@ G.resolverDilema=function(dil, idx){
   if(f.repu) S.repu=clamp(S.repu+f.repu,0,100);
   if(f.energiaMax) S.energiaMax=Math.max(2,S.energiaMax+f.energiaMax);
   if(f.margen) S.margen=clamp(S.margen+f.margen,0.15,0.9);
-  if(f.cash) S.caja+=(typeof f.cash==='number'&&Math.abs(f.cash)>10)?f.cash:0;
+  if(typeof f.cash==='number'){ S.caja += Math.abs(f.cash)>10 ? f.cash : f.cash*round(Math.max(2500,G.recurrente()*0.6)); }
   if(f.fijos) S.fijos+=900;
+  if(f.satisfaccion) S.clientes.forEach(c=>c.satisf=clamp(c.satisf+f.satisfaccion,0,100));
+  if(f.precioDown){ S.clientes.forEach(c=>c.mensual=round(c.mensual*(1-f.precioDown/2))); S.flags.guerraPrecios=1; }
+  if(f.nuevaLinea){ S.flags.nuevaLinea=1; S.margen=clamp(S.margen-0.04,0.15,0.9); for(let i=0;i<2;i++) S.leads.push(generarLead(rnd(35,70))); }
+  if(f.contrataYa){ S.flags.contrataYa=1; S.caja-=round(rnd(900,1600)); }
+  if(f.capacidadRiesgo) S.flags.capacidadRiesgo=S.dia;
+  if(f.freelance){ S.flags.freelance=1; S.fijos+=0; S.attrs.operaciones=clamp(S.attrs.operaciones+1,1,10); }
+  if(f.aplaza){ const iva=round(S.ivaAcum); S.ivaAcum=0; S.deuda+=round(iva*1.05);
+    S.prestamos.push({id:'h'+Date.now(), importe:round(iva*1.05), cuota:round(iva*1.05/12), restan:12, tin:0.0625, prod:'hacienda'});
+    G.log('Aplazas '+fmt(iva)+' € de IVA a doce meses con recargo.','warn'); }
+  if(f.tiraLinea){ const iva=round(S.ivaAcum), libre=S.linea.limite-S.linea.usado;
+    if(libre<=0){ S.caja-=iva; S.ivaAcum=0; G.log('No tenías línea de la que tirar, así que sale de caja. Para eso se pide cuando vas bien.','bad'); }
+    else { const usa=round(Math.min(libre, iva)); S.linea.usado+=usa; S.caja+=usa; S.caja-=iva; S.ivaAcum=0;
+      G.log('Tiras '+fmt(usa)+' € de la línea y liquidas el IVA.','warn'); } }
+  if(f.marca){ S.flags.marca=S.dia; }
+  if(f.adsBoost){ S.flags.adsBoost=S.dia; for(let i=0;i<3;i++) S.leads.push(generarLead(rnd(25,55))); }
+  if(f.leadsMul) S.flags.leadsMul=f.leadsMul;
+  if(f.cierreUp) S.flags.cierreUp=f.cierreUp;
+  if(f.deudaCliente){ S.flags.deudaCliente=round(Math.max(1500,G.recurrente()*0.7)); }
+  if(f.planPago){ const imp=round(Math.max(1200,G.recurrente()*0.5)); apuntarCobro(imp, S.dia+45); G.log('Plan de pagos firmado: '+fmt(imp)+' € a 45 días.','ok'); }
+  if(f.fichaDir){ const c=G.candidatos(6).filter(x=>x.rol==='comercial').sort((a,b)=>b.st.ventas-a.st.ventas)[0];
+    if(c){ c.bruto=round(c.bruto*1.25); c.coste=round(c.bruto*1.32); const r=G.contratar(c); if(r.err) G.log('No tenías caja para el fichaje.','bad'); } }
+  if(f.cuelloBotella) S.flags.cuelloBotella=1;
+  if(f.referidos) for(let i=0;i<f.referidos;i++){ const l=generarLead(rnd(60,92)); l.origen='referido'; S.leads.push(l); }
   if(f.precioUp && S.clientes.length){ const c=S.clientes[0]; c.mensual=round(c.mensual*(1+f.precioUp)); }
   if(f.bajaEspecifica && S.clientes.length){ const c=S.clientes.shift(); S.perdidos.push(c); }
   if(f.riesgoBaja && S.clientes.length && Math.random()<f.riesgoBaja){ const c=S.clientes.shift(); S.perdidos.push(c); }

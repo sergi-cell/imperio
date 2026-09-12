@@ -1,7 +1,8 @@
 /* Red primero: el caché es solo respaldo sin conexión. Al revés te quedas viendo la versión vieja. */
-const CACHE='imperio-v1';
+const CACHE='imperio-v2';
 const ASSETS=['./','./index.html','./engine.js','./ui.js',
-  './data/concepts.js','./data/sales.js','./data/people.js','./data/world.js','./manifest.json'];
+  './data/concepts.js','./data/sales.js','./data/people.js','./data/world.js','./data/misiones.js',
+  './oficina.js','./manifest.json'];
 self.addEventListener('install',e=>{ self.skipWaiting();
   e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)).catch(()=>{})); });
 self.addEventListener('activate',e=>{ e.waitUntil(

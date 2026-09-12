@@ -1,9 +1,10 @@
 global.window=global; global.IMP={};
 global.localStorage={_:{},getItem(k){return this._[k]||null},setItem(k,v){this._[k]=v},removeItem(k){delete this._[k]}};
 const fs=require('fs');
-['data/concepts.js','data/sales.js','data/people.js','data/world.js','engine.js'].forEach(f=>eval(fs.readFileSync(f,'utf8')));
+['data/concepts.js','data/sales.js','data/people.js','data/world.js','data/misiones.js','engine.js'].forEach(f=>eval(fs.readFileSync(f,'utf8')));
 const G=IMP, P=a=>a[Math.floor(Math.random()*a.length)];
 G.nuevo();
+['despacho','pipeline','cartera','equipo','codex','taller','calle','sala'].forEach(k=>G.S.flags['visto_'+k]=1);
 const DIAS=+(process.argv[2]||90);
 let negs=0, cierres=0, err=[];
 for(let d=0; d<DIAS; d++){
@@ -32,7 +33,8 @@ for(let d=0; d<DIAS; d++){
     if(d%14===0 && G.S.caja>6000){ const c=G.candidatos(3)[0]; if(c&&G.S.nivel>=2) G.contratar(c); }
     if(d===40) G.pedir('linea', 8000);
     const cajaAntes=G.S.caja;
-    const fin=G.finDia();
+    G.revisarMisiones();
+  const fin=G.finDia();
     if(fin.dilema) G.resolverDilema(fin.dilema, Math.floor(Math.random()*fin.dilema.op.length));
     if(fin.conflicto) G.resolverConflicto(fin.conflicto.def, fin.conflicto.emp, Math.floor(Math.random()*fin.conflicto.def.res.length));
     if(!isFinite(G.S.caja)||isNaN(G.S.caja)) throw new Error('caja NaN día '+d);

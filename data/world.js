@@ -3,15 +3,16 @@ window.IMP = window.IMP || {};
 
 /* ============ ZONAS DEL MAPA ============ */
 IMP.ZONAS = [
- {id:'despacho', n:'Tu despacho',        x:50, y:90, nivel:1,  ic:'desk',  desc:'Pipeline, números, decisiones. Aquí no entra dinero: aquí se decide de dónde va a entrar.'},
- {id:'calle',    n:'La calle',           x:20, y:73, nivel:1,  ic:'road',  desc:'Prospección. Listas, teléfono, correos y noes. Todo empieza aquí.'},
- {id:'sala',     n:'Sala de reuniones',  x:50, y:57, nivel:1,  ic:'chair', desc:'Donde se vende de verdad. Descubrir, proponer, aguantar objeciones y pedir el sí.'},
- {id:'taller',   n:'Entrega',            x:80, y:73, nivel:1,  ic:'gear',  desc:'Los clientes que ya tienes. Si no los atiendes, se van y no te enteras hasta el recibo.'},
- {id:'talento',  n:'Mercado de talento', x:20, y:41, nivel:3,  ic:'people',desc:'Contratar es apostar. La ficha nunca dice lo importante.'},
- {id:'banco',    n:'Banco',              x:80, y:41, nivel:4,  ic:'bank',  desc:'Préstamos, línea de crédito y factoring. Te dan cuando puedes demostrar que no lo necesitas.'},
- {id:'hacienda', n:'Hacienda',           x:50, y:26, nivel:5,  ic:'stamp', desc:'IVA trimestral, IRPF y la posibilidad de una inspección. Ineludible.'},
- {id:'puerto',   n:'El puerto',          x:20, y:11, nivel:9,  ic:'ship',  desc:'Comprar empresas. Se paga por múltiplo y se pierde por integración.'},
- {id:'cumbre',   n:'La cumbre',          x:80, y:11, nivel:16, ic:'crown', desc:'Los grandes. Ciclos de venta de meses y contratos que cambian la empresa.'}
+ {id:'despacho', n:'Tu mesa',            donde:'oficina', nivel:1,  ic:'desk',  desc:'Aquí no entra dinero: aquí se decide de dónde va a entrar.'},
+ {id:'sala',     n:'Sala de reuniones',  donde:'oficina', nivel:1,  ic:'chair', desc:'Donde se vende de verdad. Descubrir, proponer, aguantar pegas y pedir el sí.'},
+ {id:'taller',   n:'Entrega',            donde:'oficina', nivel:1,  ic:'gear',  desc:'Los clientes que ya tienes. Si no los atiendes, se van y no te enteras hasta el recibo.'},
+ {id:'equipo',   n:'Equipo',             donde:'oficina', nivel:1,  ic:'people',desc:'Cada uno produce un número al mes. Si su coste es mayor, pagas por perder dinero.'},
+ {id:'calle',    n:'La calle',           donde:'ciudad', x:50, y:82, nivel:1,  ic:'road',  desc:'Prospección. Listas, teléfono, correos y noes. Todo empieza aquí.'},
+ {id:'talento',  n:'Mercado de talento', donde:'ciudad', x:20, y:60, nivel:3,  ic:'people',desc:'Contratar es apostar. La ficha nunca dice lo importante.'},
+ {id:'banco',    n:'Banco',              donde:'ciudad', x:80, y:60, nivel:4,  ic:'bank',  desc:'Préstamos, línea y factoring. Te dan cuando puedes demostrar que no lo necesitas.'},
+ {id:'hacienda', n:'Hacienda',           donde:'ciudad', x:50, y:40, nivel:5,  ic:'stamp', desc:'IVA trimestral y la posibilidad de una inspección. Ineludible.'},
+ {id:'puerto',   n:'El puerto',          donde:'ciudad', x:20, y:18, nivel:9,  ic:'ship',  desc:'Comprar empresas. Se paga por múltiplo y se pierde por integración.'},
+ {id:'cumbre',   n:'La cumbre',          donde:'ciudad', x:80, y:18, nivel:16, ic:'crown', desc:'Los grandes. Ciclos de meses y contratos que cambian la empresa.'}
 ];
 
 /* ============ EMPRESAS COMPRABLES ============ */
@@ -158,7 +159,7 @@ IMP.DILEMAS = [
  {id:'d_nicho', min:40, tit:'Cerrar el foco',
   txt:'El 70% de tu margen viene de un solo sector. El resto te da guerra.',
   op:[{t:'Especializarme solo en ese sector.', ef:{nicho:true, repu:10, leadsMul:0.8, cierreUp:15}, cpt:'propuesta-unica', fb:'Menos leads y muchísimo mejores. La especialización sube el precio y baja el ciclo de venta.'},
-      {t:'Seguir con todos, no vaya a ser.', ef:{}, cpt:'propuesta-unica', fb:'El que vale para todos no vale para nadie. Y compites siempre por precio.'},
+      {t:'Seguir con todos, no vaya a ser.', ef:{repu:-3, cierreUp:-3}, cpt:'propuesta-unica', fb:'El que vale para todos no vale para nadie. Y compites siempre por precio.'},
       {t:'Dos líneas separadas con marcas distintas.', ef:{energiaMax:-1}, cpt:'coste-oportunidad', fb:'El doble de trabajo con la misma cabeza. Solo funciona con equipo de verdad.'}]},
  {id:'d_impago_grande', min:60, tit:'No te pagan',
   txt:'{cliente} te debe {importe} € y te pide seguir trabajando mientras "arregla la tesorería".',

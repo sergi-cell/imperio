@@ -4,7 +4,7 @@
 const G=window.IMP, f=G.fmt, U=G.util;
 const $=s=>document.querySelector(s);
 const h=(t,c,x)=>{const e=document.createElement(t); if(c)e.className=c; if(x!==undefined)e.innerHTML=x; return e;};
-let S=null, zona='despacho', neg=null, colaFin=null;
+let S=null, zona='despacho', vista='oficina', neg=null, colaFin=null, colaMis=[];
 
 /* ================= SONIDO (con el desbloqueo de iOS) ================= */
 const SND=(function(){
@@ -50,9 +50,10 @@ function barra(v,c){ return `<div class="barra"><i style="width:${U.clamp(v,0,10
 /* ================= HUD ================= */
 function hud(){
   S=G.S;
-  $('#s-caja').textContent=(Math.abs(S.caja)>=1e6? (S.caja/1e6).toFixed(2).replace('.',',')+'M' : f(S.caja))+' €';
+  $('#s-caja').textContent=(Math.abs(S.caja)>=1e6? (S.caja/1e6).toFixed(2).replace('.',',')+'M' : Math.abs(S.caja)>=1e5? (S.caja/1000).toFixed(0)+'k' : f(S.caja))+' €';
   $('#s-caja').parentNode.className='stat '+(S.caja<0?'rojo':S.caja<G.gastoMensual()?'oro':'oro');
-  $('#s-rec').textContent=f(G.recurrente())+' €';
+  const rec=G.recurrente();
+  $('#s-rec').textContent=(rec>=1e5? (rec/1000).toFixed(0)+'k' : f(rec))+' €';
   $('#s-dia').textContent=S.dia;
   const r=G.rango();
   $('#s-nivlab').textContent='Rango '+r.r;
@@ -60,10 +61,57 @@ function hud(){
   let p=''; for(let i=0;i<S.energiaMax;i++) p+=`<div class="pila${i<S.energia?' on':''}"></div>`;
   $('#s-pilas').innerHTML=p;
   $('#xpbar i').style.width=(S.xp/G.xpNecesaria(S.nivel)*100)+'%';
-  pintarMapa();
+  pintarVista(); pintarObjetivo();
 }
 
 /* ================= MAPA ================= */
+function pintarVista(){
+  document.querySelectorAll('#seg button').forEach(b=>{
+    const on=b.dataset.v===vista; b.classList.toggle('on',on); b.setAttribute('aria-selected',on?'true':'false');
+  });
+  $('#oficina').hidden = vista!=='oficina';
+  $('#ciudad').hidden  = vista!=='ciudad';
+  const t=G.tier();
+  $('#segtier').textContent = vista==='oficina' ? t.n : 'Fuera';
+  if(vista==='oficina') pintarOficina(); else pintarCiudad();
+  guiar();
+}
+const EN_OFICINA={despacho:1,sala:1,taller:1,equipo:1,objetivos:1};
+function guiar(){
+  const mi=G.misionActual(), dest=mi&&mi.m.ir;
+  document.querySelectorAll('.bt').forEach(b=>b.classList.remove('guia'));
+  document.querySelectorAll('#seg button').forEach(b=>b.classList.remove('guia'));
+  document.querySelectorAll('.hot,.nodo').forEach(b=>b.classList.remove('guia'));
+  if(!dest) return;
+  if(dest==='pipeline'||dest==='codex'||dest==='equipo'){
+    const b=document.querySelector('[data-ir='+(dest==='equipo'?'equipo':dest)+']'); if(b) b.classList.add('guia');
+  }
+  if(dest==='cartera'){ const g=document.querySelector('.hot[data-z=taller]'); if(g) g.classList.add('guia'); }
+  if(EN_OFICINA[dest]){ const g=document.querySelector('.hot[data-z='+dest+']'); if(g) g.classList.add('guia'); return; }
+  const z=G.ZONAS.find(x=>x.id===dest);
+  if(z && z.donde==='ciudad'){
+    if(vista==='oficina'){ const pu=document.querySelector('.hot[data-z=ciudad]'); if(pu) pu.classList.add('guia');
+      const sb=document.querySelector('#seg button[data-v=ciudad]'); if(sb) sb.classList.add('guia'); }
+    else { const n=[...document.querySelectorAll('#ciudad .nodo')].find(el=>{
+        const b=el.querySelector('button'); return b && b.getAttribute('aria-label').indexOf(z.n)===0; });
+      if(n) n.classList.add('guia'); }
+  }
+}
+function pintarOficina(){
+  const c=$('#oficina'); c.innerHTML=G.oficinaSVG();
+  c.querySelectorAll('.hot').forEach(g=>{
+    const z=g.dataset.z;
+    const ir=()=>{ SND.tap();
+      if(z==='ciudad'){ vista='ciudad'; pintarVista(); return; }
+      if(z==='objetivos') return pObjetivos();
+      if(z==='equipo') return pEquipo();
+      if(z==='taller'){ abrir('Entrega','Los que ya tienes. Retenerlos cuesta una fracción de conseguirlos.',pCartera,'taller'); return chequear(); }
+      const zz=G.ZONAS.find(x=>x.id===z); if(zz){ zona=z; abrirZona(zz); }
+    };
+    g.addEventListener('click',ir);
+    g.addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); ir(); } });
+  });
+}
 const ICONOS={
  desk:'<path d="M3 8h20M5 8v13M21 8v13M3 14h20"/>',
  road:'<path d="M8 22 11 3M18 22 15 3M13 6v3M13 12v3M13 18v3"/>',
@@ -75,47 +123,102 @@ const ICONOS={
  ship:'<path d="M4 17h18l-2 5H6zM13 4v9M6 13h14M9 8h8"/>',
  crown:'<path d="M3 8l3.5 10h13L23 8l-5 4-5-7-5 7z"/>'
 };
-function pintarMapa(){
-  const w=$('#mapwrap');
+function pintarCiudad(){
+  const w=$('#mapwrap'), zonas=G.ZONAS.filter(z=>z.donde==='ciudad');
   w.querySelectorAll('.nodo').forEach(n=>n.remove());
   const svg=$('#rutas'); svg.innerHTML='';
-  const orden=G.ZONAS;
-  for(let i=1;i<orden.length;i++){
-    const a=orden[i-1], b=orden[i], vis=S.nivel>=b.nivel;
+  let sk='';
+  for(let x=0;x<100;x+=5){ const bh=6+Math.abs(Math.sin(x*0.8))*13;
+    sk+=`<rect x="${x}" y="${100-bh}" width="4.2" height="${bh}" fill="#121926"/>`; }
+  svg.insertAdjacentHTML('beforeend', sk);
+  for(let i=1;i<zonas.length;i++){ const a=zonas[i-1], b=zonas[i], vis=S.nivel>=b.nivel;
     svg.insertAdjacentHTML('beforeend',
       `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="${vis?'#2E3A50':'#1A2130'}" stroke-width=".4" stroke-dasharray="1.6 1.6" vector-effect="non-scaling-stroke"/>`);
   }
-  orden.forEach(z=>{
+  zonas.forEach(z=>{
     const abierta=S.nivel>=z.nivel;
     const n=h('div','nodo'+(zona===z.id?' aqui':'')+(abierta?'':' cerrada'));
     n.style.left=z.x+'%'; n.style.top=z.y+'%';
     const b=h('button'); b.disabled=!abierta;
     b.innerHTML=`<svg viewBox="0 0 26 26" aria-hidden="true">${ICONOS[z.ic]}</svg>`;
     b.setAttribute('aria-label',z.n+(abierta?'':' — bloqueado, nivel '+z.nivel));
-    b.onclick=()=>{ SND.tap(); zona=z.id; $('#ficha').style.left=z.x+'%'; $('#ficha').style.top=(z.y+7)+'%';
+    b.onclick=()=>{ SND.tap(); zona=z.id; $('#ficha').style.left=z.x+'%'; $('#ficha').style.top=z.y+'%';
       document.querySelectorAll('.nodo').forEach(x=>x.classList.remove('aqui')); n.classList.add('aqui');
-      setTimeout(()=>abrirZona(z),220); };
+      setTimeout(()=>abrirZona(z),200); };
     n.appendChild(b);
     n.appendChild(h('em',null, z.n + (abierta?'':'<i>Nivel '+z.nivel+'</i>')));
-    const bd=aviso(z.id);
-    if(bd) n.insertAdjacentHTML('beforeend',`<span class="badge${bd.oro?' oro':''}">${bd.n}</span>`);
+    if(z.id==='calle' && !S.leads.filter(l=>l.estado!=='frio').length)
+      n.insertAdjacentHTML('beforeend','<span class="badge oro">!</span>');
+    if(z.id==='talento' && S.flags.candidatoTop) n.insertAdjacentHTML('beforeend','<span class="badge oro">!</span>');
     w.appendChild(n);
   });
-  const zz=G.ZONAS.find(z=>z.id===zona)||G.ZONAS[0];
-  const fi=document.getElementById('ficha'); fi.style.left=zz.x+'%'; fi.style.top=(zz.y+7)+'%';
+  const zz=zonas.find(z=>z.id===zona)||zonas[0];
+  const fi=$('#ficha'); fi.style.left=zz.x+'%'; fi.style.top=zz.y+'%';
 }
-function aviso(id){
-  if(id==='sala'){ const n=S.leads.filter(l=>l.estado!=='frio').length; return n?{n}:null; }
-  if(id==='taller'){ const n=S.clientes.filter(c=>c.satisf<45).length; return n?{n}:null; }
-  if(id==='calle'){ return S.leads.filter(l=>l.estado!=='frio').length? null : {n:'!',oro:true}; }
-  if(id==='equipo') return null;
-  return null;
+
+/* ================= OBJETIVOS Y MISIONES ================= */
+function pintarObjetivo(){
+  const mi=G.misionActual(), e=$('#objetivo');
+  if(!mi){ $('#ob-eti').textContent='Todo hecho'; $('#ob-tit').textContent='No queda ningún objetivo'; $('#ob-pista').textContent='Sigue jugando: la dificultad no para.'; return; }
+  $('#ob-eti').textContent = mi.tipo==='tutorial' ? `Paso ${mi.i} de ${mi.n}` : `Objetivo ${mi.i} de ${mi.n}`;
+  $('#ob-tit').textContent = mi.m.t;
+  $('#ob-pista').textContent = mi.m.pista || mi.m.d;
+  e.classList.toggle('listo', mi.tipo!=='tutorial');
+}
+function chequear(){
+  const hechas=G.revisarMisiones();
+  if(hechas.length) colaMis=colaMis.concat(hechas);
+  hud();
+  if(colaMis.length) verMision();
+}
+function verMision(){
+  const x=colaMis.shift(); if(!x) return;
+  SND.nivel();
+  const eraTut=x.tipo==='tutorial';
+  flash(eraTut?'PASO SUPERADO':'OBJETIVO CUMPLIDO', x.m.hecho || x.m.d, ()=>{
+    if(colaMis.length) return verMision();
+    if(S.puntos>0){ flash('NIVEL '+S.nivel, 'Rango '+G.rango().r+' — '+G.rango().n+'. Tienes '+S.puntos+' punto(s) para repartir en tu mesa.', ()=>hud()); }
+    else hud();
+  }, '+'+(x.m.xp||0)+' XP');
+}
+function pObjetivos(){
+  abrir('Objetivos','Los pasos van en orden. Los objetivos se cumplen cuando toque.', w=>{
+    const pend=G.TUTORIAL.filter(m=>!S.misiones[m.id]);
+    if(pend.length){
+      w.appendChild(h('div','tit','Primeros pasos · '+(G.TUTORIAL.length-pend.length)+'/'+G.TUTORIAL.length));
+      G.TUTORIAL.forEach(m=>{
+        const ok=!!S.misiones[m.id], act=pend[0]&&pend[0].id===m.id;
+        if(!ok && !act) return;
+        w.insertAdjacentHTML('beforeend',
+          `<div class="card${act?' acc':''}" style="${ok?'opacity:.55':''}">
+            <h3>${ok?'✓ ':''}${m.t}</h3><p>${ok? m.hecho : m.d}</p>
+            ${act? `<span class="eti oro">Ahora</span><span class="eti">${m.pista}</span>`:`<span class="eti verde">Hecho el día ${S.misiones[m.id]}</span>`}</div>`);
+      });
+      if(pend.length>1) w.insertAdjacentHTML('beforeend',
+        `<p class="tell">Quedan ${pend.length-1} pasos más. Van saliendo de uno en uno.</p>`);
+    }
+    const hechos=G.OBJETIVOS.filter(o=>S.objetivos[o.id]);
+    w.appendChild(h('div','tit','Objetivos largos · '+hechos.length+'/'+G.OBJETIVOS.length));
+    G.OBJETIVOS.forEach(o=>{
+      const ok=!!S.objetivos[o.id];
+      w.insertAdjacentHTML('beforeend',
+        `<div class="kv"><span style="color:${ok?'var(--verde)':'var(--mut)'}">${ok?'✓':'○'} ${o.t}</span>
+         <b style="font-family:var(--body);font-weight:400;font-size:12.5px;color:var(--dim);text-align:right">${ok?'día '+S.objetivos[o.id]:o.d}</b></div>`);
+    });
+  });
 }
 
 /* ================= PANEL ================= */
-function abrir(tit,sub,render){
+function abrir(tit,sub,render,claveZona){
   $('#ptit').textContent=tit; $('#psub').textContent=sub||'';
-  const w=$('#pwrap'); w.innerHTML=''; render(w);
+  const w=$('#pwrap'); w.innerHTML='';
+  if(claveZona && G.PRIMERA[claveZona] && !S.flags['visto_'+claveZona]){
+    const e=G.PRIMERA[claveZona];
+    w.insertAdjacentHTML('beforeend',
+      `<div class="primera"><b>Cómo funciona esto</b><h4>${e.t}</h4><p>${e.d}</p></div>`);
+  }
+  if(claveZona && !S.flags['visto_'+claveZona]){ S.flags['visto_'+claveZona]=S.dia; G.guardar(); }
+  render(w);
   $('#panel').classList.add('on'); $('#pbody').scrollTop=0;
 }
 function cerrar(){ $('#panel').classList.remove('on'); neg=null; hud(); }
@@ -123,8 +226,10 @@ $('#pcerrar').onclick=()=>{ SND.tap(); if(neg && confirm('Si te vas ahora pierde
 
 function abrirZona(z){
   const m={despacho:pDespacho, calle:pCalle, sala:pSala, taller:pCartera, talento:pTalento,
-           banco:pBanco, hacienda:pHacienda, puerto:pPuerto, cumbre:pCumbre};
-  abrir(z.n, z.desc, m[z.id]);
+           banco:pBanco, hacienda:pHacienda, puerto:pPuerto, cumbre:pCumbre, equipo:()=>pEquipo()};
+  if(z.id==='equipo') return pEquipo();
+  abrir(z.n, z.desc, m[z.id], z.id);
+  chequear();
 }
 
 /* ================= DESPACHO ================= */
@@ -200,7 +305,7 @@ function pCalle(w){
         if(r.cpt) x.insertAdjacentHTML('beforeend', conceptoHTML(r.cpt));
         const v=h('button','big','Volver'); v.onclick=()=>{ hud(); pCalle($('#pwrap')); $('#ptit').textContent='La calle'; }; x.appendChild(v);
       });
-      hud();
+      chequear();
     };
     w.appendChild(b);
   });
@@ -208,7 +313,7 @@ function pCalle(w){
 
 /* ================= PIPELINE / SALA ================= */
 function pSala(w){ pipeline(w,true); }
-function pPipeline(){ abrir('Pipeline','Todo lo que tienes abierto. Ponderado, no sumado.', w=>pipeline(w,false)); }
+function pPipeline(){ abrir('Pipeline','Todo lo que tienes abierto. Ponderado, no sumado.', w=>pipeline(w,false), 'pipeline'); chequear(); }
 function pipeline(w, soloCalientes){
   const cal=S.leads.filter(l=>l.estado!=='frio'), frios=S.leads.filter(l=>l.estado==='frio');
   const pond=cal.reduce((a,l)=>a+l.ticket*(l.q/160),0);
@@ -243,7 +348,7 @@ function tarjetaLead(l, vivo){
       toast(r.reabre? '¡Responde! Toque nº '+r.t : 'Nada. Toque nº '+r.t+' ('+Math.round(r.p*100)+'% de probabilidad)');
       if(r.cpt) setTimeout(()=>abrir('Has aprendido algo','', x=>{ x.insertAdjacentHTML('beforeend',conceptoHTML(r.cpt));
         const v=h('button','big','Seguir'); v.onclick=()=>{hud(); pPipeline();}; x.appendChild(v); }),400);
-      else { hud(); pipeline($('#pwrap'), false); } }
+      else { chequear(); pipeline($('#pwrap'), false); } }
   };
   c.appendChild(b);
   return c;
@@ -351,7 +456,7 @@ function finNeg(r, lead){
     if(r.cpt) w.insertAdjacentHTML('beforeend', conceptoHTML(r.cpt));
     if(!gan) w.insertAdjacentHTML('beforeend',
       `<p class="tell">${r.fin==='frio'?'Sigue en el pipeline como enfriado. El seguimiento es donde está el dinero que ya te has ganado.':'También queda en enfriados. Un perdido de hoy es un cliente dentro de seis meses si le haces seguimiento.'}</p>`);
-    const b=h('button','big','Seguir'); b.onclick=()=>{ neg=null; hud(); pPipeline(); }; w.appendChild(b);
+    const b=h('button','big','Seguir'); b.onclick=()=>{ neg=null; chequear(); pPipeline(); }; w.appendChild(b);
   });
   neg=null; G.guardar();
 }
@@ -389,7 +494,7 @@ function pCartera(w){
       const b=h('button','op','<b>Dedicarle un día</b><small>1 energía · +18 de satisfacción</small>');
       b.disabled=S.energia<1;
       b.onclick=()=>{ S.energia--; c.satisf=U.clamp(c.satisf+18,0,100); G.xp(10); SND.ok();
-        G.log('Atiendes a '+c.empresa+'.'); G.guardar(); hud(); abrir('Cartera','',pCartera); };
+        G.log('Atiendes a '+c.empresa+'.'); G.guardar(); chequear(); abrir('Cartera','',pCartera); };
       el.appendChild(b);
     }
     w.appendChild(el);
@@ -419,7 +524,7 @@ function pEquipo(){
           : `<span class="eti">Aún no sabes cómo es · faltan ${Math.max(0,r.dias-(S.dia-e.alta))} días</span>`}</div>
         <div class="kv" style="margin-top:8px"><span>Indemnización si le echas</span><b>${f(G.indemnizacion(e))} €</b></div>`;
       const f1=h('button','op','<b>Formarle</b><small>1 energía · '+f(420+(e.bruto||1200)*0.25)+' € · +1 a una habilidad y +6 de moral</small>');
-      f1.disabled=S.energia<1; f1.onclick=()=>{ const r2=G.formar(e.id); if(r2.err) return toast(r2.err); SND.ok(); toast('+1 en '+r2.k); hud(); pEquipo(); };
+      f1.disabled=S.energia<1; f1.onclick=()=>{ const r2=G.formar(e.id); if(r2.err) return toast(r2.err); SND.ok(); toast('+1 en '+r2.k); chequear(); pEquipo(); };
       el.appendChild(f1);
       const f2=h('button','op','<b>Subirle un 10%</b><small>Sube la moral. Si el problema no era el dinero, compras tiempo, no lealtad.</small>');
       f2.onclick=()=>{ G.subirSueldo(e.id,0.10); SND.tap(); G.guardar(); hud(); pEquipo(); };
@@ -430,12 +535,13 @@ function pEquipo(){
         abrir('Despido', e.nombre, x=>{
           x.insertAdjacentHTML('beforeend',`<div class="feed mal"><b>Hecho</b><p>Indemnización ${f(r2.ind)} €.${r2.roba?' Se lleva '+r2.roba+' cliente(s) con él.':''}${r2.juicio?' Y te ha demandado: pagas un 80% más.':''}</p></div>`);
           x.insertAdjacentHTML('beforeend',conceptoHTML(G.CONCEPTS.find(c=>c.id==='despedir-tarde')));
-          const b=h('button','big','Seguir'); b.onclick=()=>{hud(); pEquipo();}; x.appendChild(b); });
+          const b=h('button','big','Seguir'); b.onclick=()=>{chequear(); pEquipo();}; x.appendChild(b); });
       };
       el.appendChild(f3);
       w.appendChild(el);
     });
-  });
+  }, 'equipo');
+  chequear();
 }
 
 /* ================= TALENTO ================= */
@@ -453,7 +559,7 @@ function pTalento(w){
       <div class="kv"><span>Alta y selección</span><b>${f((c.bruto||0)*0.6+280)} €</b></div>`;
     const b=h('button','op','<b>Contratar</b><small>El rasgo oculto lo descubrirás jugando</small>');
     b.onclick=()=>{ const r=G.contratar(c); if(r.err) return toast(r.err); SND.ok();
-      cacheCand=cacheCand.filter(x=>x.id!==c.id); hud(); abrir('Mercado de talento','',pTalento); };
+      cacheCand=cacheCand.filter(x=>x.id!==c.id); chequear(); abrir('Mercado de talento','',pTalento); };
     el.appendChild(b);
     w.appendChild(el);
   });
@@ -483,7 +589,7 @@ function pBanco(w){
         const b=h('button','op',`<b>${p.id==='factoring'?'Adelantar':'Pedir'} ${f(imp)} €</b>`+
           (p.id==='prestamo'||p.id==='leasing'? `<small>Cuota aprox. ${f(imp*(of.tin/12)/(1-Math.pow(1+of.tin/12,-36)))} €/mes durante 36 meses</small>`:
            p.id==='factoring'? `<small>Recibes ${f(imp*(1-of.com))} € hoy · pierdes ${f(imp*of.com)} €</small>`:'<small>Solo pagas si la usas</small>'));
-        b.onclick=()=>{ const r=G.pedir(p.id, imp, 36); if(r.err) return toast(r.err); SND.caja(); toast('Hecho'); hud(); abrir('Banco','',pBanco); };
+        b.onclick=()=>{ const r=G.pedir(p.id, imp, 36); if(r.err) return toast(r.err); SND.caja(); toast('Hecho'); chequear(); abrir('Banco','',pBanco); };
         el.appendChild(b);
       });
     }
@@ -539,7 +645,7 @@ function pPuerto(w){
       b.disabled=S.energia<1||S.caja<coste;
       b.onclick=()=>{ const r=G.dueDiligence(t.key,a.id); if(r.err) return toast(r.err);
         r.hallados.length?SND.alarma():SND.ok();
-        toast(r.hallados.length? r.hallados.length+' hallazgo(s)' : 'Nada raro por aquí'); hud(); abrir('El puerto','',pPuerto); };
+        toast(r.hallados.length? r.hallados.length+' hallazgo(s)' : 'Nada raro por aquí'); chequear(); abrir('El puerto','',pPuerto); };
       el.appendChild(b);
     });
     el.insertAdjacentHTML('beforeend','<div class="tit">Ofertar</div>');
@@ -556,7 +662,7 @@ function pPuerto(w){
             x.insertAdjacentHTML('beforeend',`<div class="feed"><b>Firmado</b><p>Suma ${f(r.mensual)} €/mes.</p></div>`);
             r.bomba.forEach(o2=>x.insertAdjacentHTML('beforeend',
               `<div class="feed mal"><b>Lo que no miraste</b><p>${o2.t}</p></div>`+conceptoHTML(G.CONCEPTS.find(c=>c.id===o2.cpt)||{a:'',n:'',d:'',f:null})));
-            const b2=h('button','big','Seguir'); b2.onclick=()=>{hud(); abrir('El puerto','',pPuerto);}; x.appendChild(b2);
+            const b2=h('button','big','Seguir'); b2.onclick=()=>{chequear(); abrir('El puerto','',pPuerto);}; x.appendChild(b2);
           });
         };
         el.appendChild(b);
@@ -604,7 +710,8 @@ function pCodex(){
         }
       });
     });
-  });
+  }, 'codex');
+  chequear();
 }
 
 /* ================= FIN DE DÍA ================= */
@@ -629,13 +736,14 @@ function finDia(){
       return;
     }
     const b=h('button','big','Empezar el día '+S.dia);
-    b.onclick=()=>{ siguientePaso(); };
+    b.onclick=()=>{ G.revisarMisiones().forEach(x=>colaMis.push(x)); siguientePaso(); };
     w.appendChild(b);
   });
   hud();
 }
 function siguientePaso(){
   const r=colaFin;
+  if(colaMis.length) return verMision();
   if(r && r.dilema){ const d=r.dilema; r.dilema=null; return verDilema(d); }
   if(r && r.conflicto){ const c=r.conflicto; r.conflicto=null; return verConflicto(c); }
   colaFin=null;
@@ -651,7 +759,7 @@ function verDilema(d){
         abrir(d.tit,'Consecuencia', x=>{
           x.insertAdjacentHTML('beforeend',`<div class="feed"><b>Lo que has decidido</b><p>${r.fb}</p></div>`);
           if(r.cpt) x.insertAdjacentHTML('beforeend',conceptoHTML(r.cpt));
-          const b2=h('button','big','Seguir'); b2.onclick=()=>{ hud(); siguientePaso(); }; x.appendChild(b2);
+          const b2=h('button','big','Seguir'); b2.onclick=()=>{ chequear(); siguientePaso(); }; x.appendChild(b2);
         });
       };
       w.appendChild(b);
@@ -668,7 +776,7 @@ function verConflicto(c){
         abrir(cf.tit,'Cómo ha ido', x=>{
           x.insertAdjacentHTML('beforeend',`<div class="feed${(o.m||0)<0?' mal':''}"><b>Resultado</b><p>${r.fb}</p></div>`);
           if(r.cpt) x.insertAdjacentHTML('beforeend',conceptoHTML(r.cpt));
-          const b2=h('button','big','Seguir'); b2.onclick=()=>{ hud(); siguientePaso(); }; x.appendChild(b2);
+          const b2=h('button','big','Seguir'); b2.onclick=()=>{ chequear(); siguientePaso(); }; x.appendChild(b2);
         });
       };
       w.appendChild(b);
@@ -699,17 +807,20 @@ function texto(t,e){
 $('#b-dia').onclick=()=>{ if(neg) return toast('Termina la conversación primero'); finDia(); };
 document.querySelectorAll('[data-ir]').forEach(b=>b.onclick=()=>{
   SND.tap();
-  const m={pipeline:pPipeline, cartera:()=>abrir('Cartera','Los que ya tienes. Retenerlos cuesta una fracción de conseguirlos.',pCartera),
+  const m={pipeline:pPipeline, cartera:()=>{abrir('Cartera','Los que ya tienes. Retenerlos cuesta una fracción de conseguirlos.',pCartera,'taller');chequear();},
            equipo:pEquipo, codex:pCodex};
   m[b.dataset.ir]();
 });
+document.querySelectorAll('#seg button').forEach(b=>b.onclick=()=>{ SND.tap(); vista=b.dataset.v; pintarVista(); });
+$('#objetivo').onclick=()=>{ SND.tap(); pObjetivos(); };
 document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&$('#panel').classList.contains('on')&&!neg) cerrar(); });
 
 function intro(){
-  flash('IMPERIO','Empiezas con 14.000 € en el banco, un cliente heredado y dos contactos tibios. Finanzas 8. Ventas 2. Sabes leer perfectamente una cuenta de resultados mientras se vacía.',
-    ()=>{ flash('LA REGLA','Nadie compra porque se lo cuentes. Compran porque les preguntas. Descubre antes de rebatir: las respuestas buenas están bloqueadas hasta que sabes con quién hablas.',
-      ()=>{ cerrar(); abrirZona(G.ZONAS[1]); }, 'Empezar');
-    },'Vale');
+  flash('IMPERIO','Un garaje, 14.000 € y un cliente heredado. Finanzas 8, ventas 2: sabes leer perfectamente una cuenta de resultados mientras se vacía.',
+   ()=>flash('CÓMO SE JUEGA','Cada día tienes unas pocas acciones. Sales a la calle a buscar gente, la trabajas en la sala de reuniones y entregas lo que vendes. Todo pasa dentro de esta oficina o al salir por la puerta.',
+    ()=>flash('LA REGLA','Nadie compra porque se lo cuentes: compran porque les preguntas. Las mejores respuestas están bloqueadas hasta que descubres con quién hablas.',
+     ()=>flash('NO VAS SOLO','Abajo tienes siempre el objetivo de ahora mismo, con la pista de dónde tocarlo. Quince pasos y ya sabes jugar.',
+      ()=>{ cerrar(); hud(); }, 'Empezar'),'Vale'),'Sigue'),'Vale');
 }
 (function boot(){
   const s=G.cargar();

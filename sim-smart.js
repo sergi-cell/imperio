@@ -1,10 +1,11 @@
 global.window=global; global.IMP={};
 global.localStorage={_:{},getItem(k){return this._[k]||null},setItem(k,v){this._[k]=v},removeItem(k){delete this._[k]}};
 const fs=require('fs');
-['data/concepts.js','data/sales.js','data/people.js','data/world.js','engine.js'].forEach(f=>eval(fs.readFileSync(f,'utf8')));
+['data/concepts.js','data/sales.js','data/people.js','data/world.js','data/misiones.js','engine.js'].forEach(f=>eval(fs.readFileSync(f,'utf8')));
 const G=IMP, P=a=>a[Math.floor(Math.random()*a.length)];
 const val=o=>(o.i||0)*0.62+(o.c||0)*0.38;
 G.nuevo();
+['despacho','pipeline','cartera','equipo','codex','taller','calle','sala'].forEach(k=>G.S.flags['visto_'+k]=1);
 const DIAS=+(process.argv[2]||120); let negs=0,cierres=0,err=[];
 for(let d=0;d<DIAS;d++){ try{
   let g=0;
@@ -30,6 +31,7 @@ for(let d=0;d<DIAS;d++){ try{
     }
   }
   if(G.S.caja>9000 && G.S.equipo.length<Math.floor(G.S.nivel/3)){ const c=G.candidatos(4).sort((a,b)=>(b.st.ejec+b.st.ventas)-(a.st.ejec+a.st.ventas))[0]; if(c) G.contratar(c); }
+  G.revisarMisiones();
   const fin=G.finDia();
   if(fin.dilema) G.resolverDilema(fin.dilema,0);
   if(fin.conflicto) G.resolverConflicto(fin.conflicto.def, fin.conflicto.emp, 0);
@@ -38,5 +40,6 @@ const S=G.S,f=G.fmt;
 console.log('nivel',S.nivel,G.rango().r,'| caja',f(S.caja),'| recurrente',f(G.recurrente()),'| benef',f(G.beneficio()));
 console.log('clientes',S.clientes.length,'| perdidos',S.perdidos.length,'| equipo',S.equipo.length,'| leads',S.leads.length);
 console.log('cierre',(cierres/Math.max(negs,1)*100).toFixed(0)+'% ('+cierres+'/'+negs+') | códex',Object.keys(S.codex).length+'/'+G.CONCEPTS.length);
+console.log('misiones',Object.keys(S.misiones).length+'/'+G.TUTORIAL.length,'| objetivos',Object.keys(S.objetivos).length+'/'+G.OBJETIVOS.length);
 console.log('dif',G.dif().toFixed(2),'| moral',Math.round(S.moral),'| cerrada:',!!S.flags.cerrada,'| quiebras',S.quiebras);
 if(err.length){console.log('✗',err.join('\n'));process.exit(1);}
