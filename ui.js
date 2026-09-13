@@ -209,6 +209,8 @@ function pObjetivos(){
         S.misiones[a.id]=S.dia; G.guardar(); SND.tap(); toast('Paso saltado'); hud(); pObjetivos(); };
       w.appendChild(sb);
     }
+    w.insertAdjacentHTML('beforeend',
+      `<p class="tell" style="margin-top:18px">Versión ${G.VERSION} · día ${S.dia} de partida.</p>`);
     const hechos=G.OBJETIVOS.filter(o=>S.objetivos[o.id]);
     w.appendChild(h('div','tit','Objetivos largos · '+hechos.length+'/'+G.OBJETIVOS.length));
     G.OBJETIVOS.forEach(o=>{
@@ -861,6 +863,14 @@ function texto(t,e){
   });
 }
 
+function avisoNueva(){
+  if(document.getElementById('nueva')) return;
+  const b=document.createElement('button'); b.id='nueva';
+  b.innerHTML='Hay una versión nueva del juego <s>Recargar</s>';
+  b.onclick=()=>{ try{G.guardar();}catch(e){} location.reload(true); };
+  document.body.appendChild(b);
+}
+
 /* ================= BOOT ================= */
 $('#b-dia').onclick=()=>{ if(neg) return toast('Termina la conversación primero'); finDia(); };
 document.querySelectorAll('[data-ir]').forEach(b=>b.onclick=()=>{
@@ -886,7 +896,16 @@ function intro(){
     if(s.ampliacion){ delete s.ampliacion; G.guardar(); toast('Ampliación cargada. Tu partida sigue.'); }
     toast('Partida recuperada · día '+S.dia);
   } else { G.nuevo(); S=G.S; hud(); intro(); }
-  if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
+  if('serviceWorker' in navigator){
+    navigator.serviceWorker.register('sw.js').then(reg=>{
+      const mira=w=>w&&w.addEventListener('statechange',()=>{
+        if(w.state==='installed' && navigator.serviceWorker.controller) avisoNueva();
+      });
+      mira(reg.installing);
+      reg.addEventListener('updatefound',()=>mira(reg.installing));
+      setInterval(()=>reg.update().catch(()=>{}), 300000);
+    }).catch(()=>{});
+  }
 })();
 window.addEventListener('beforeunload',()=>{ try{G.guardar();}catch(e){} });
 })();

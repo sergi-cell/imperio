@@ -4,6 +4,7 @@ window.IMP = window.IMP || {};
 'use strict';
 
 const SAVE_KEY='imperio_save_v1', SAVE_V=1;
+G.VERSION='6';
 const rnd=(a,b)=>a+Math.random()*(b-a);
 const ri=(a,b)=>Math.floor(rnd(a,b+1));
 const pick=a=>a[Math.floor(Math.random()*a.length)];

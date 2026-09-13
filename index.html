@@ -202,6 +202,11 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
 .big.gh{background:none;color:var(--mut);border:1px solid var(--line2)}
 .big.gh:hover{color:var(--tx);background:var(--panel)}
 
+#nueva{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(140px + env(safe-area-inset-bottom));
+  z-index:95;background:var(--oro);color:#12151C;border:none;padding:11px 18px;font-size:13.5px;font-weight:600;
+  box-shadow:0 8px 28px rgba(0,0,0,.5);max-width:min(92vw,420px);text-align:left}
+#nueva s{display:block;text-decoration:none;font-family:var(--mono);font-size:11px;letter-spacing:.12em;
+  text-transform:uppercase;margin-top:3px;opacity:.75}
 #toast{position:fixed;left:50%;bottom:calc(140px + env(safe-area-inset-bottom));transform:translateX(-50%);
   z-index:80;background:var(--panel2);border:1px solid var(--line2);padding:9px 15px;font-size:13px;
   opacity:0;pointer-events:none;transition:.25s;max-width:min(92vw,420px)}
@@ -264,13 +269,13 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
 </div></div>
 <div id="toast"></div>
 
-<script src="data/concepts.js"></script>
-<script src="data/sales.js"></script>
-<script src="data/people.js"></script>
-<script src="data/world.js"></script>
-<script src="data/misiones.js"></script>
-<script src="engine.js"></script>
-<script src="oficina.js"></script>
-<script src="ui.js"></script>
+<script src="data/concepts.js?v=6"></script>
+<script src="data/sales.js?v=6"></script>
+<script src="data/people.js?v=6"></script>
+<script src="data/world.js?v=6"></script>
+<script src="data/misiones.js?v=6"></script>
+<script src="engine.js?v=6"></script>
+<script src="oficina.js?v=6"></script>
+<script src="ui.js?v=6"></script>
 </body>
 </html>
