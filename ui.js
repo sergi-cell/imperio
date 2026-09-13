@@ -186,7 +186,7 @@ function verMision(){
     if(colaMis.length) return verMision();
     if(S.puntos>0){ flash('NIVEL '+S.nivel, 'Rango '+G.rango().r+' — '+G.rango().n+'. Tienes '+S.puntos+' punto(s) para repartir en tu mesa.', ()=>hud()); }
     else hud();
-  }, '+'+(x.m.xp||0)+' XP');
+  }, '+'+(x.m.xp||0)+' XP  ·  Seguir');
 }
 function pObjetivos(){
   abrir('Objetivos','Los pasos van en orden. Los objetivos se cumplen cuando toque.', w=>{
@@ -485,9 +485,15 @@ function pCartera(w){
   w.insertAdjacentHTML('beforeend',
     `<div class="card"><div class="kv"><span>Clientes</span><b>${S.clientes.length}</b></div>
      <div class="kv"><span>Recurrente</span><b style="color:var(--verde)">${f(G.recurrente())} €/mes</b></div>
-     <div class="kv"><span>Capacidad usada</span><b style="color:${r>1?'var(--rojo)':'var(--verde)'}">${Math.round(r*100)}%</b></div>
-     ${barra(r*100/1.5,r>1?'var(--rojo)':'var(--verde)')}
+     <div class="kv"><span>Puedes entregar</span><b>${f(cap)} €/mes</b></div>
+     <div class="kv"><span>Te ocupan</span><b style="color:${r>1?'var(--rojo)':'var(--verde)'}">${f(car)} €/mes · ${Math.round(r*100)}%</b></div>
+     ${barra(r*100/1.5,r>1?'var(--rojo)':r>0.85?'var(--oro)':'var(--verde)')}
      <div class="kv"><span>Perdidos hasta hoy</span><b>${S.perdidos.length}</b></div></div>`);
+  if(r>1) w.insertAdjacentHTML('beforeend',
+    `<div class="feed mal"><b>Por encima de tu capacidad</b><p>Cada día pierdes
+     <b>${((r-1)*3.5).toFixed(1)}</b> de satisfacción en cada cliente. Tienes tres salidas: subir capacidad
+     (gente de Entrega, o puntos en Operaciones desde TU MESA), soltar al que más te ocupa, o dejar de cerrar
+     hasta que cuadre. Cerrar por encima del 125% hace que el nuevo entre ya descontento.</p></div>`);
   if(S.clientes.length){
     const top=S.clientes.slice().sort((a,b)=>b.mensual-a.mensual)[0];
     const peso=top.mensual/Math.max(G.recurrente(),1);
@@ -496,22 +502,59 @@ function pCartera(w){
   }
   w.appendChild(h('div','tit','Tus clientes'));
   if(!S.clientes.length) w.appendChild(h('div','vacio','Ninguno. Ese es el problema.'));
+  const refresca=()=>{ chequear(); abrir('Entrega','Los que ya tienes. Retenerlos cuesta una fracción de conseguirlos.',pCartera); };
   S.clientes.slice().sort((a,b)=>a.satisf-b.satisf).forEach(c=>{
     const el=h('div','card'+(c.satisf<45?' acc':''));
+    const rend=c.mensual/Math.max(c.carga,1);
     el.innerHTML=`<h3>${c.empresa}</h3><p>${c.secN} · desde el día ${c.alta}</p>
-      <div class="kv"><span>Al mes</span><b style="color:var(--verde)">${f(c.mensual)} €</b></div>
+      <div class="kv"><span>Te paga</span><b style="color:var(--verde)">${f(c.mensual)} €/mes</b></div>
+      <div class="kv"><span>Te ocupa</span><b style="color:${rend<0.9?'var(--rojo)':'var(--tx)'}">${f(c.carga)} €/mes de capacidad</b></div>
+      <div class="kv"><span>Rinde</span><b style="color:${rend<0.9?'var(--rojo)':rend>1.15?'var(--verde)':'var(--oro)'}">${Math.round(rend*100)}% de lo que ocupa</b></div>
       <div class="kv"><span>Satisfacción</span><b style="color:${color(c.satisf)}">${Math.round(c.satisf)}</b></div>
       ${barra(c.satisf)}
       <div class="kv"><span>Contrato</span><b>${Math.max(0,Math.round(c.meses))} meses</b></div>
       <div class="kv"><span>Te paga a</span><b>${c.plazo} días</b></div>
-      ${c.satisf<45?'<p style="color:var(--rojo);margin:8px 0 0">Se va a ir. Y cuando se vaya, te enterarás por un correo de dos líneas.</p>':''}`;
-    if(c.satisf<70){
-      const b=h('button','op','<b>Dedicarle un día</b><small>1 energía · +18 de satisfacción</small>');
-      b.disabled=S.energia<1;
-      b.onclick=()=>{ S.energia--; c.satisf=U.clamp(c.satisf+18,0,100); G.xp(10); SND.ok();
-        G.log('Atiendes a '+c.empresa+'.'); G.guardar(); chequear(); abrir('Cartera','',pCartera); };
-      el.appendChild(b);
-    }
+      ${c.satisf<45?'<p style="color:var(--rojo);margin:8px 0 0">Se va a ir. Y cuando se vaya, te enterarás por un correo de dos líneas.</p>'
+        :c.satisf>=66?'<p style="color:var(--verde);margin:8px 0 0">Por encima de 66 renueva solo, y con un 3% de subida.</p>':''}`;
+
+    // --- atender ---
+    const motivo = S.energia<1 ? 'Sin energía: cierra el día'
+                 : c.satisf>=92 ? 'Ya está a '+Math.round(c.satisf)+'. Tu día rinde más en otro sitio.' : null;
+    const b1=h('button','op'+(motivo?' bloq':''),
+      `<b>Dedicarle un día</b><small>1 energía · +18 de satisfacción${motivo? ' · '+motivo : ' · quedaría en '+Math.min(100,Math.round(c.satisf+18))}</small>`);
+    b1.disabled=!!motivo;
+    b1.onclick=()=>{ const r2=G.atender(c.id); if(r2.err) return toast(r2.err); SND.ok();
+      toast('Satisfacción '+Math.round(r2.antes)+' → '+Math.round(r2.ahora)); refresca(); };
+    el.appendChild(b1);
+
+    // --- subir precio ---
+    const m2 = S.energia<1 ? 'Sin energía: cierra el día' : null;
+    const riesgo=Math.round(U.clamp(0.5-c.satisf/160+0.2,0.05,0.85)*100);
+    const b2=h('button','op'+(m2?' bloq':''),
+      `<b>Subirle el precio un 20%</b><small>1 energía · pasaría a ${f(Math.round(c.mensual*1.2))} €/mes · −14 de satisfacción · ${riesgo}% de que se vaya${m2?' · '+m2:''}</small>`);
+    b2.disabled=!!m2;
+    b2.onclick=()=>{ if(!confirm('¿Subirle un 20% a '+c.empresa+'? Hay un '+riesgo+'% de que se vaya.')) return;
+      const r2=G.subirPrecio(c.id,0.2); if(r2.err) return toast(r2.err);
+      r2.se_fue?SND.mal():SND.caja();
+      abrir(r2.se_fue?'Se ha ido':'Ha aceptado', c.empresa, x=>{
+        x.insertAdjacentHTML('beforeend', r2.se_fue
+          ? `<div class="feed mal"><b>No cuela</b><p>Se va. Pierdes ${f(c.mensual)} €/mes y liberas ${f(r2.libera)} € de capacidad. A veces esa es la salida buena: mira si el hueco lo llena algo mejor.</p></div>`
+          : `<div class="feed"><b>Ha aceptado</b><p>${f(r2.antes)} → <b>${f(r2.ahora)} €/mes</b> sin ocupar ni un euro más de capacidad. Esto es lo que significa subir el margen sin vender más.</p></div>`);
+        x.insertAdjacentHTML('beforeend', conceptoHTML(G.CONCEPTS.find(k=>k.id==='valor-vs-coste')));
+        const v2=h('button','big','Seguir'); v2.onclick=refresca; x.appendChild(v2); }); };
+    el.appendChild(b2);
+
+    // --- soltar ---
+    const b3=h('button','op',`<b>Soltar este cliente</b><small>Liberas ${f(c.carga)} € de capacidad y pierdes ${f(c.mensual)} €/mes</small>`);
+    b3.onclick=()=>{ if(!confirm('¿Soltar a '+c.empresa+'? Pierdes '+f(c.mensual)+' €/mes.')) return;
+      const r2=G.soltar(c.id); if(r2.err) return toast(r2.err); SND.mal();
+      abrir('Soltado', c.empresa, x=>{
+        x.insertAdjacentHTML('beforeend',
+          `<div class="feed"><b>Fuera</b><p>Pierdes ${f(r2.pierde)} €/mes y liberas <b>${f(r2.libera)} €</b> de capacidad.
+           Duele en la facturación de este mes y arregla los seis siguientes, si el hueco lo llenas con algo mejor.</p></div>`);
+        x.insertAdjacentHTML('beforeend', conceptoHTML(G.CONCEPTS.find(k=>k.id==='coste-oportunidad')));
+        const v2=h('button','big','Seguir'); v2.onclick=refresca; x.appendChild(v2); }); };
+    el.appendChild(b3);
     w.appendChild(el);
   });
 }

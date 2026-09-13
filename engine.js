@@ -429,6 +429,44 @@ G.recurrente=function(){ return G.S.clientes.reduce((a,c)=>a+c.mensual,0) + G.S.
 G.recurrenteReal=function(){ return G.S.clientes.reduce((a,c)=>a+ c.mensual*(c.satisf<45? 0.5+c.satisf/90 : 1),0)
   + G.S.empresas.reduce((a,e)=>a+(e.mensual||0),0); };
 
+G.atender=function(id){
+  const S=G.S, c=S.clientes.find(x=>x.id===id);
+  if(!c) return {err:'Ese cliente ya no está'};
+  if(S.energia<1) return {err:'Sin energía: cierra el día'};
+  if(c.satisf>=92) return {err:'Ya está a '+Math.round(c.satisf)+'. Tu día rinde más en otro sitio.'};
+  S.energia--; const antes=c.satisf;
+  c.satisf=clamp(c.satisf+18,0,100); G.xp(10);
+  G.log(`Dedicas el día a ${c.empresa}: satisfacción ${Math.round(antes)} → ${Math.round(c.satisf)}.`,'ok');
+  G.guardar(); return {ok:true, antes, ahora:c.satisf};
+};
+G.subirPrecio=function(id, pct){
+  const S=G.S, c=S.clientes.find(x=>x.id===id);
+  if(!c) return {err:'Ese cliente ya no está'};
+  if(S.energia<1) return {err:'Sin energía: cierra el día'};
+  S.energia--;
+  const riesgo=clamp(0.5 - c.satisf/160 + pct, 0.05, 0.85);
+  c.satisf=clamp(c.satisf-14,0,100);
+  if(Math.random()<riesgo){
+    S.clientes=S.clientes.filter(x=>x.id!==c.id); S.perdidos.push(c);
+    G.aprender('valor-vs-coste'); G.xp(14);
+    G.log(`${c.empresa} no acepta la subida y se va. Liberas ${fmt(c.carga)} € de capacidad.`,'bad');
+    return {ok:true, se_fue:true, riesgo, libera:c.carga};
+  }
+  const antes=c.mensual; c.mensual=round(c.mensual*(1+pct));
+  G.aprender('valor-vs-coste'); G.xp(24);
+  G.log(`${c.empresa} acepta: ${fmt(antes)} → ${fmt(c.mensual)} €/mes.`,'ok');
+  return {ok:true, se_fue:false, antes, ahora:c.mensual, riesgo};
+};
+G.soltar=function(id){
+  const S=G.S, c=S.clientes.find(x=>x.id===id);
+  if(!c) return {err:'Ese cliente ya no está'};
+  S.clientes=S.clientes.filter(x=>x.id!==c.id); S.perdidos.push(c);
+  S.moral=clamp(S.moral+3,0,100);
+  G.aprender('coste-oportunidad'); G.xp(18);
+  G.log(`Sueltas a ${c.empresa}. Pierdes ${fmt(c.mensual)} €/mes y liberas ${fmt(c.carga)} € de capacidad.`,'warn');
+  G.guardar(); return {ok:true, pierde:c.mensual, libera:c.carga};
+};
+
 /* ================= EQUIPO ================= */
 let EID=1;
 G.candidatos=function(n){
