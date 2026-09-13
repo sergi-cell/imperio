@@ -41,7 +41,9 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
 .stat b{display:block;font-family:var(--mono);font-size:11px;letter-spacing:.09em;color:var(--dim);font-weight:400;text-transform:uppercase}
 .stat s{display:block;text-decoration:none;font-family:var(--mono);font-size:16px;letter-spacing:-.03em;font-weight:600;letter-spacing:-.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .stat.oro s{color:var(--oro)} .stat.verde s{color:var(--verde)} .stat.rojo s{color:var(--rojo)}
-.pilas{display:flex;gap:3px;margin-top:3px}
+.pilas{display:flex;gap:3px;margin-top:4px;align-items:center}
+.pilas i{font-style:normal;font-family:var(--mono);font-size:10px;color:var(--dim);margin-left:4px;letter-spacing:.04em}
+.pilas.seca i{color:var(--rojo)}
 .pila{width:12px;height:7px;background:var(--line2);border:1px solid var(--line2)}
 .pila.on{background:var(--violeta);border-color:var(--violeta);box-shadow:0 0 7px rgba(124,107,255,.55)}
 #xpbar{height:3px;background:var(--line);margin-top:8px;max-width:900px;margin-left:auto;margin-right:auto}
@@ -57,6 +59,7 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
 #segtier{margin-left:auto;font-family:var(--mono);font-size:10px;letter-spacing:.1em;
   text-transform:uppercase;color:var(--dim);text-align:right}
 #oficina{flex:1;min-height:0;max-width:640px;width:100%;margin:0 auto;display:flex;align-items:center}
+#oficina[hidden],#ciudad[hidden]{display:none!important}
 #svgof{width:100%;height:100%;max-height:100%;display:block}
 .hot{cursor:pointer}
 .hot .hl{transition:opacity .16s}
@@ -79,6 +82,8 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
   text-transform:uppercase;color:var(--oro);font-weight:400}
 #objetivo s{display:block;text-decoration:none;font-size:14px;font-weight:600;line-height:1.25}
 #objetivo em{display:block;font-style:normal;font-size:12px;color:var(--mut);line-height:1.3}
+#objetivo u{display:block;text-decoration:none;font-size:12.5px;color:var(--oro);font-weight:600;margin-top:3px}
+#objetivo u:empty{display:none}
 #objetivo.listo{border-left:2px solid var(--verde)}
 #barra{max-width:900px}
 #rutas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
@@ -218,7 +223,7 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
       <b>Caja</b><s id="s-caja">—</s></div>
     <div class="stat verde" style="flex:1.2"><b>Recurrente</b><s id="s-rec">—</s></div>
     <div class="stat"><b>Día</b><s id="s-dia">—</s></div>
-    <div class="stat"><b id="s-nivlab">Nivel</b><s id="s-niv">—</s><div class="pilas" id="s-pilas"></div></div>
+    <div class="stat" style="flex:1.15"><b id="s-nivlab">Nivel</b><s id="s-niv">—</s><div class="pilas" id="s-pilas"></div></div>
   </div>
   <div id="xpbar"><i style="width:0"></i></div>
 </header>
@@ -239,7 +244,7 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
 </main>
 
 <button id="objetivo" aria-label="Objetivo actual">
-  <b id="ob-eti">Objetivo</b><s id="ob-tit">—</s><em id="ob-pista"></em>
+  <b id="ob-eti">Objetivo</b><s id="ob-tit">—</s><em id="ob-pista"></em><u id="ob-aviso"></u>
 </button>
 
 <nav id="barra">

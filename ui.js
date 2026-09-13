@@ -58,8 +58,9 @@ function hud(){
   const r=G.rango();
   $('#s-nivlab').textContent='Rango '+r.r;
   $('#s-niv').textContent=S.nivel;
-  let p=''; for(let i=0;i<S.energiaMax;i++) p+=`<div class="pila${i<S.energia?' on':''}"></div>`;
-  $('#s-pilas').innerHTML=p;
+  let p=''; for(let i=0;i<Math.min(S.energiaMax,9);i++) p+=`<div class="pila${i<S.energia?' on':''}"></div>`;
+  $('#s-pilas').innerHTML=p+`<i>${S.energia}/${S.energiaMax}</i>`;
+  $('#s-pilas').classList.toggle('seca', S.energia<=0);
   $('#xpbar i').style.width=(S.xp/G.xpNecesaria(S.nivel)*100)+'%';
   pintarVista(); pintarObjetivo();
 }
@@ -82,6 +83,7 @@ function guiar(){
   document.querySelectorAll('.bt').forEach(b=>b.classList.remove('guia'));
   document.querySelectorAll('#seg button').forEach(b=>b.classList.remove('guia'));
   document.querySelectorAll('.hot,.nodo').forEach(b=>b.classList.remove('guia'));
+  if(S.energia<=0){ const bd=document.getElementById('b-dia'); if(bd) bd.classList.add('guia'); return; }
   if(!dest) return;
   if(dest==='pipeline'||dest==='codex'||dest==='equipo'){
     const b=document.querySelector('[data-ir='+(dest==='equipo'?'equipo':dest)+']'); if(b) b.classList.add('guia');
@@ -157,13 +159,18 @@ function pintarCiudad(){
 }
 
 /* ================= OBJETIVOS Y MISIONES ================= */
+function avisoEnergia(){
+  const u=document.getElementById('ob-aviso'); if(!u) return;
+  u.textContent = S.energia<=0 ? '▸ Se te han acabado las acciones de hoy. Pulsa CERRAR DÍA.' : '';
+}
 function pintarObjetivo(){
   const mi=G.misionActual(), e=$('#objetivo');
-  if(!mi){ $('#ob-eti').textContent='Todo hecho'; $('#ob-tit').textContent='No queda ningún objetivo'; $('#ob-pista').textContent='Sigue jugando: la dificultad no para.'; return; }
+  if(!mi){ $('#ob-eti').textContent='Todo hecho'; $('#ob-tit').textContent='No queda ningún objetivo'; $('#ob-pista').textContent='Sigue jugando: la dificultad no para.'; avisoEnergia(); return; }
   $('#ob-eti').textContent = mi.tipo==='tutorial' ? `Paso ${mi.i} de ${mi.n}` : `Objetivo ${mi.i} de ${mi.n}`;
   $('#ob-tit').textContent = mi.m.t;
   $('#ob-pista').textContent = mi.m.pista || mi.m.d;
   e.classList.toggle('listo', mi.tipo!=='tutorial');
+  avisoEnergia();
 }
 function chequear(){
   const hechas=G.revisarMisiones();
@@ -283,6 +290,9 @@ function pDespacho(w){
 
 /* ================= LA CALLE (prospección) ================= */
 function pCalle(w){
+  if(S.energia<=0) w.insertAdjacentHTML('beforeend',
+    `<div class="feed mal"><b>Hoy ya no puedes más</b><p>Se te han acabado las acciones del día.
+     Cierra el día (botón naranja, abajo a la derecha) y mañana vuelves a tener ${S.energiaMax}.</p></div>`);
   w.insertAdjacentHTML('beforeend',`<p style="color:var(--mut);font-size:13.5px;margin:0 0 16px">De cada 100 impactos salen unas 20 respuestas, 8 reuniones y 2 clientes. No es que lo hagas mal: es la tasa. El error es medir el resultado de diez intentos.</p>`);
   G.CANALES.forEach(c=>{
     const no=G.canalDisponible(c), coste=G.costeCanal(c);

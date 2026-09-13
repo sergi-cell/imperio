@@ -68,7 +68,16 @@ G.cargar=function(){
 G.borrar=function(){ try{ localStorage.removeItem(SAVE_KEY);}catch(e){} G.S=null; };
 function migrar(s){
   const base=nuevoEstado();
-  for(const k in base) if(s[k]===undefined) s[k]=base[k];      // campos nuevos
+  for(const k in base){
+    if(s[k]===undefined){ s[k]=base[k]; continue; }
+    // los objetos de contadores hay que fusionarlos: si no, un campo nuevo queda undefined y ++ lo vuelve NaN
+    if(base[k] && typeof base[k]==='object' && !Array.isArray(base[k])){
+      for(const j in base[k]) if(s[k][j]===undefined) s[k][j]=base[k][j];
+    }
+  }
+  for(const j in s.stats) if(typeof s.stats[j]!=='number' || !isFinite(s.stats[j])) s.stats[j]=base.stats[j]||0;
+  ['caja','deuda','fijos','xp','nivel','puntos','energia','energiaMax','moral','repu','margen','dia','ivaAcum']
+    .forEach(k=>{ if(typeof s[k]!=='number' || !isFinite(s[k])) s[k]=base[k]; });
   if(!s.packs) s.packs=['core'];
   const nuevos=G.PACKS.filter(p=>s.packs.indexOf(p)<0);
   if(nuevos.length){ s.packs=G.PACKS.slice(); s.ampliacion=nuevos; }
@@ -171,7 +180,7 @@ G.canalDisponible=function(c){
   if(S.nivel<c.nivel) return 'Nivel '+c.nivel;
   if(c.reqClientes && S.clientes.length<c.reqClientes) return 'Necesitas clientes';
   if(c.reqPerdidos && S.perdidos.length<c.reqPerdidos) return 'Aún no has perdido a nadie';
-  if(S.energia<c.energia) return 'Sin energía';
+  if(S.energia<c.energia) return 'Sin energía: cierra el día';
   if(S.caja < costeCanal(c)) return 'Sin caja';
   return null;
 };
