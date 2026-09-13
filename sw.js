@@ -1,5 +1,5 @@
 /* Red primero: el caché es solo respaldo sin conexión. Al revés te quedas viendo la versión vieja. */
-const CACHE='imperio-v3';
+const CACHE='imperio-v4';
 const ASSETS=['./','./index.html','./engine.js','./ui.js',
   './data/concepts.js','./data/sales.js','./data/people.js','./data/world.js','./data/misiones.js',
   './oficina.js','./manifest.json'];

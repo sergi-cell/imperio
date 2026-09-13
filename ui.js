@@ -203,6 +203,11 @@ function pObjetivos(){
       });
       if(pend.length>1) w.insertAdjacentHTML('beforeend',
         `<p class="tell">Quedan ${pend.length-1} pasos más. Van saliendo de uno en uno.</p>`);
+      const sb=h('button','op','<b>No consigo hacer este paso · sáltalo</b><small>Sigue el tutorial por el siguiente. No da experiencia.</small>');
+      sb.onclick=()=>{ const a=pend[0]; if(!a) return;
+        if(!confirm('¿Saltar "'+a.t+'"?')) return;
+        S.misiones[a.id]=S.dia; G.guardar(); SND.tap(); toast('Paso saltado'); hud(); pObjetivos(); };
+      w.appendChild(sb);
     }
     const hechos=G.OBJETIVOS.filter(o=>S.objetivos[o.id]);
     w.appendChild(h('div','tit','Objetivos largos · '+hechos.length+'/'+G.OBJETIVOS.length));

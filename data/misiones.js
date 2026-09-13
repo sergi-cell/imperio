@@ -42,8 +42,9 @@ IMP.TUTORIAL = [
   ir:'pipeline', xp:60, check:S=>S.stats.maxToques>=5,
   hecho:'Acabas de entrar en la franja donde se cierra la mayoría de las ventas. Casi todo el mundo lo deja en el segundo intento.'},
 
- {id:'t11', t:'Cuida a los que ya tienes', d:'Abre tu cartera y mira cómo están.', pista:'Botón CARTERA.',
-  ir:'cartera', xp:20, check:S=>S.flags.visto_cartera,
+ {id:'t11', t:'Cuida a los que ya tienes', d:'Abre tu cartera de clientes y mira cómo están.',
+  pista:'Toca ENTREGA, a la derecha dentro de la oficina.',
+  ir:'taller', xp:20, check:S=>!!(S.flags.visto_taller||S.flags.visto_cartera),
   hecho:'Retener cuesta una fracción de captar. Y un cliente por debajo de 45 de satisfacción ya se está yendo.'},
 
  {id:'t12', t:'Llega a nivel 3', d:'Sube hasta nivel 3 para poder contratar.', pista:'Todo lo que haces da experiencia. Prospectar, negociar, cerrar y equivocarte.',
