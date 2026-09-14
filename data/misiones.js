@@ -51,6 +51,11 @@ IMP.TUTORIAL = [
   ir:null, xp:40, check:S=>S.nivel>=3,
   hecho:'Ya puedes contratar. Ojo: la ficha de un candidato nunca dice lo importante.'},
 
+ {id:'t12b', t:'Reparte tus puntos', d:'Cada nivel te da 2 puntos. Súbete VENTAS: es lo que más pesa en cada conversación.',
+  pista:'Toca TU MESA → abajo, "Tienes N puntos por repartir".',
+  ir:'despacho', xp:50, check:S=>S.stats.puntosGastados>=2,
+  hecho:'Ventas no solo suma al final: mejora cada respuesta que das. Con Ventas 2 vas cuesta arriba toda la conversación; con Ventas 8, cuesta abajo. Es la inversión más rentable del juego.'},
+
  {id:'t13', t:'Contrata a alguien', d:'Ficha a tu primera persona.', pista:'En la ciudad → MERCADO DE TALENTO.',
   ir:'talento', xp:50, check:S=>S.equipo.length>=1,
   hecho:'Su coste real es el bruto por 1,32. Y tiene un rasgo oculto que vas a tardar días en descubrir.'},

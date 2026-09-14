@@ -57,7 +57,7 @@ function hud(){
   $('#s-dia').textContent=S.dia;
   const r=G.rango();
   $('#s-nivlab').textContent='Rango '+r.r;
-  $('#s-niv').textContent=S.nivel;
+  $('#s-niv').innerHTML=S.nivel+(S.puntos>0?' <em style="font-style:normal;font-size:12px;color:var(--oro)">+'+S.puntos+'</em>':'');
   let p=''; for(let i=0;i<Math.min(S.energiaMax,9);i++) p+=`<div class="pila${i<S.energia?' on':''}"></div>`;
   $('#s-pilas').innerHTML=p+`<i>${S.energia}/${S.energiaMax}</i>`;
   $('#s-pilas').classList.toggle('seca', S.energia<=0);
@@ -83,6 +83,7 @@ function guiar(){
   document.querySelectorAll('.bt').forEach(b=>b.classList.remove('guia'));
   document.querySelectorAll('#seg button').forEach(b=>b.classList.remove('guia'));
   document.querySelectorAll('.hot,.nodo').forEach(b=>b.classList.remove('guia'));
+  if(S.puntos>0){ const g=document.querySelector('.hot[data-z=despacho]'); if(g){ g.classList.add('guia'); return; } }
   if(S.energia<=0){ const bd=document.getElementById('b-dia'); if(bd) bd.classList.add('guia'); return; }
   if(!dest) return;
   if(dest==='pipeline'||dest==='codex'||dest==='equipo'){
@@ -161,7 +162,8 @@ function pintarCiudad(){
 /* ================= OBJETIVOS Y MISIONES ================= */
 function avisoEnergia(){
   const u=document.getElementById('ob-aviso'); if(!u) return;
-  u.textContent = S.energia<=0 ? '▸ Se te han acabado las acciones de hoy. Pulsa CERRAR DÍA.' : '';
+  u.textContent = S.puntos>0 ? '▸ Tienes '+S.puntos+' punto(s) sin repartir. Súbete VENTAS en TU MESA.'
+                : S.energia<=0 ? '▸ Se te han acabado las acciones de hoy. Pulsa CERRAR DÍA.' : '';
 }
 function pintarObjetivo(){
   const mi=G.misionActual(), e=$('#objetivo');
@@ -248,6 +250,24 @@ function abrirZona(z){
 
 /* ================= DESPACHO ================= */
 function pDespacho(w){
+  if(S.puntos>0){
+    const c0=h('div','feed');
+    c0.innerHTML=`<b>Tienes ${S.puntos} punto(s) sin repartir</b>
+      <p>Cada nivel te da dos. <b>Ventas</b> es el que más pesa: no solo suma al cerrar, mejora
+      <i>cada respuesta</i> que das en una conversación. Con Ventas 2 vas cuesta arriba todo el rato.</p>`;
+    w.appendChild(c0);
+    Object.keys(S.attrs).forEach(k=>{
+      const efecto={ventas:'cada respuesta y el cierre', marketing:'la calidad de los contactos que entran',
+        operaciones:'+850 €/mes de capacidad de entrega', finanzas:'mejor trato del banco',
+        liderazgo:'producción y moral de tu equipo'}[k];
+      const b=h('button','op',`<b>${k[0].toUpperCase()+k.slice(1)} ${S.attrs[k]} → ${S.attrs[k]+1}</b><small>${efecto}</small>`);
+      b.disabled=S.attrs[k]>=10;
+      b.onclick=()=>{ S.attrs[k]++; S.puntos--; S.stats.puntosGastados++; SND.ok(); G.guardar();
+        chequear(); abrir('Tu mesa','',pDespacho,'despacho'); };
+      w.appendChild(b);
+    });
+    w.appendChild(h('div','hr'));
+  }
   const rec=G.recurrente(), gas=G.gastoMensual(), ben=G.beneficio(), run=G.runway();
   const cap=G.capacidad(), car=G.carga();
   w.appendChild(h('div','tit','Cómo vas'));
@@ -276,15 +296,6 @@ function pDespacho(w){
   const a=h('div','card');
   a.innerHTML=`<h3>${G.rango().r} · ${G.rango().n}</h3><p>${G.rango().desc}</p>`+
    Object.entries(S.attrs).map(([k,v])=>`<div class="kv"><span>${k[0].toUpperCase()+k.slice(1)}</span><b>${v}/10</b></div>${barra(v*10,'var(--violeta)')}`).join('');
-  if(S.puntos>0){
-    a.insertAdjacentHTML('beforeend',`<p style="color:var(--oro);margin-top:12px">Tienes ${S.puntos} punto(s) por repartir.</p>`);
-    Object.keys(S.attrs).forEach(k=>{
-      const b=h('button','op',`Subir ${k} → ${S.attrs[k]+1}`);
-      b.disabled=S.attrs[k]>=10;
-      b.onclick=()=>{ S.attrs[k]++; S.puntos--; SND.ok(); G.guardar(); abrirZona(G.ZONAS[0]); };
-      a.appendChild(b);
-    });
-  }
   w.appendChild(a);
 
   w.appendChild(h('div','tit','Diario'));
@@ -462,7 +473,11 @@ function finNeg(r, lead){
   abrir(gan?'CERRADO':(r.fin==='frio'?'Se enfría':'Perdido'), lead.empresa, w=>{
     w.insertAdjacentHTML('beforeend',
       `<div class="feed${gan?'':' mal'}"><b>${gan?'Ha entrado':'No ha entrado'}</b><p>${r.fb}</p>
-       ${r.score!==undefined?`<div class="delta"><i>Tu puntuación ${r.score} · hacía falta ${r.umbral}</i></div>`:''}</div>`);
+       ${r.score!==undefined?`<div class="delta"><i>Tu puntuación <b>${r.score}</b> · hacía falta <b>${r.umbral}</b></i></div>`:''}</div>`);
+    if(r.desglose) w.insertAdjacentHTML('beforeend',
+      `<div class="card"><span class="eti">De dónde sale la puntuación</span>`+
+      r.desglose.map(d=>`<div class="kv"><span>${d.k}</span><b style="color:${d.v>=0?'var(--verde)':'var(--rojo)'}">${d.v>=0?'+':''}${String(d.v).replace('.',',')}</b></div>`).join('')+
+      `<div class="kv"><span><b>Total</b></span><b>${r.score}</b></div></div>`);
     if(r.aviso) w.insertAdjacentHTML('beforeend',`<div class="card acc"><span class="eti oro">Lo importante</span><p style="margin:8px 0 0;color:var(--tx)">${r.aviso}</p></div>`);
     if(gan) w.insertAdjacentHTML('beforeend',
       `<div class="card"><h3>${r.cliente.empresa}</h3>

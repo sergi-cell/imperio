@@ -4,7 +4,7 @@ window.IMP = window.IMP || {};
 'use strict';
 
 const SAVE_KEY='imperio_save_v1', SAVE_V=1;
-G.VERSION='6';
+G.VERSION='7';
 const rnd=(a,b)=>a+Math.random()*(b-a);
 const ri=(a,b)=>Math.floor(rnd(a,b+1));
 const pick=a=>a[Math.floor(Math.random()*a.length)];
@@ -40,7 +40,7 @@ function nuevoEstado(){
     codex:{}, maestria:{}, logros:{},
     stats:{toques:0, noes:0, cierres:0, perdidas:0, facturado:0, despidos:0,
            prospecciones:0, negociaciones:0, objeciones:0, cierresPedidos:0, maxReveal:0, maxToques:0,
-           cierresSinDescuento:0, cierresAnclaAlta:0, cierresFrios:0, hallazgos:0, referidos:0},
+           cierresSinDescuento:0, cierresAnclaAlta:0, cierresFrios:0, hallazgos:0, referidos:0, puntosGastados:0},
     misiones:{}, objetivos:{},
     flags:{}, hist:[], diario:[],
     racha:{ultimo:null, dias:0},
@@ -272,7 +272,7 @@ G.jugar=function(neg, opId){
     if(op.bonus.has && neg.reveal[op.bonus.has]){ di+=op.bonus.i||0; dc+=op.bonus.c||0; }
   }
   // tu habilidad de ventas modula lo que sale bien
-  const skill=(S.attrs.ventas-5)*0.9;
+  const skill=(S.attrs.ventas-5)*0.4;
   if(di>0) di+=skill; if(dc>0) dc+=skill*0.6;
 
   if(di>0) di*= (1-neg.interes/128);            // cada punto cuesta más que el anterior
@@ -317,10 +317,23 @@ G.jugar=function(neg, opId){
     if(ratio>1.7){ muro=-70; aviso='No tenía ese dinero. Ni con la mejor conversación del mundo entraba.'; }
     else if(ratio>1.25){ muro=-24; aviso='Estabas por encima de su presupuesto. Se puede salvar, pero es cuesta arriba.'; }
     else if(ratio<0.7){ muro=6; aviso='Has entrado muy por debajo de lo que podía pagar. Cierras, y dejas dinero encima de la mesa.'; }
-    if(lead.hidden.decisor===false) muro-=14;
-    const score=neg.interes*0.60 + neg.confianza*0.36 + (S.attrs.ventas-5)*1.6 + info*1.6
+    if(lead.hidden.decisor===false){
+      const lomanejo = neg.hechas.indexOf('no_decisor')>=0 && neg.confianza>=45;
+      muro -= lomanejo? 4 : 14;
+      if(lomanejo) r.aviso='No decidía él, pero lo trabajaste: te has ganado que defienda la propuesta dentro.';
+    }
+    const score=neg.interes*0.60 + neg.confianza*0.36 + (S.attrs.ventas-5)*1.3 + info*1.8
                 + (S.flags.nicho?4:0) + (S.flags.proceso?3:0) + (S.flags.cierreUp||0) + muro;
     r.aviso=aviso;
+    r.desglose=[
+      {k:'Interés', v:round(neg.interes*0.60,1)},
+      {k:'Confianza', v:round(neg.confianza*0.36,1)},
+      {k:'Datos que le sacaste ('+info+')', v:round(info*1.8,1)},
+      {k:'Tu nivel de ventas ('+S.attrs.ventas+'/10)', v:round((S.attrs.ventas-5)*1.3,1)}
+    ];
+    if(S.flags.nicho) r.desglose.push({k:'Estás especializado', v:4});
+    if(S.flags.proceso) r.desglose.push({k:'Tienes proceso de ventas', v:3});
+    if(muro) r.desglose.push({k: ratio>1.25?'Te pasaste de su presupuesto':(lead.hidden.decisor===false?'No decidía él':'Precio por debajo de lo que podía pagar'), v:round(muro,1)});
     r.score=round(score); r.umbral=op.umbral;
     if(op.prueba){ neg.prueba=true; neg.precio=round(neg.precio*0.55/10)*10; }
     if(op.price) neg.precio=round(neg.precio*(1+op.price)/10)*10;
@@ -337,20 +350,22 @@ function marcarMaestria(objId, bien){
 G.nivelMaestria=function(id){ const m=G.S.maestria[id]; if(!m) return 0; return clamp(Math.floor(m.ok/3),0,5); };
 
 function construirPool(neg, lead, arq){
-  const d=G.dif(), pool=[];
+  const d=G.dif();
   const cand=G.OBJECIONES.filter(o=>['precio','dilacion','confianza','competencia','cualificacion','contexto'].indexOf(o.cat)>=0);
-  const pref=cand.filter(o=>arq.obj.indexOf(o.id)>=0);
-  pref.forEach(o=>pool.push(o));
-  // situacionales
-  if(neg.precio > lead.hidden.presupuesto*1.15) push(pool, 'caro');
-  if(!lead.hidden.decisor) push(pool,'no_decisor');
-  if(lead.hidden.alternativa==='proveedor') push(pool,'competencia_mala');
-  if(lead.hidden.urgencia<35) push(pool,'no_es_momento');
-  if(lead.hidden.riesgo>65) push(pool,'riesgo');
-  if(lead.tam>=3) push(pool,'pago');
-  while(pool.length<2) push(pool, pick(cand).id);
+  // las situacionales van SIEMPRE: si algo de su situación te va a penalizar al cerrar,
+  // tiene que darte la ocasión de resolverlo en la conversación.
+  const fijas=[];
+  if(!lead.hidden.decisor) push(fijas,'no_decisor');
+  if(neg.precio > lead.hidden.presupuesto*1.15) push(fijas,'caro');
+  if(lead.hidden.alternativa==='proveedor') push(fijas,'competencia_mala');
+  if(lead.hidden.riesgo>70) push(fijas,'riesgo');
+  if(lead.hidden.urgencia<30) push(fijas,'no_es_momento');
+  if(lead.tam>=3) push(fijas,'pago');
   const n=clamp(Math.round(2 + (d-1)*1.6 + (lead.tam-1)*0.5), 2, 5);
-  return mezclar(uniq(pool)).slice(0,n);
+  const relleno=mezclar(cand.filter(o=>arq.obj.indexOf(o.id)>=0).concat(cand))
+                  .filter(o=>fijas.indexOf(o)<0);
+  const pool=mezclar(fijas.slice(0, n)).concat(relleno);
+  return uniq(pool).slice(0, Math.max(n, Math.min(fijas.length, 5)));
 }
 function push(pool,id){ const o=G.OBJECIONES.find(x=>x.id===id); if(o&&pool.indexOf(o)<0) pool.push(o); }
 function uniq(a){ return a.filter((x,i)=>a.indexOf(x)===i); }

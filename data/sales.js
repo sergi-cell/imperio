@@ -347,19 +347,19 @@ IMP.OBJECIONES = [
 
 /* ============ CIERRES ============ */
 IMP.CIERRES = [
- {id:'directo', t:'"¿Lo hacemos?"', umbral:64, i:0, c:4, cpt:'cerrar-o-perder',
+ {id:'directo', t:'"¿Lo hacemos?"', umbral:70, i:0, c:4, cpt:'cerrar-o-perder',
   fb:'La pregunta más rentable que existe. Un porcentaje enorme de propuestas no se pierden: nadie pidió el sí.'},
- {id:'alternativa', t:'"¿Empezamos el día 1 o el 15?"', umbral:60, i:3, c:2, cpt:'tres-opciones',
+ {id:'alternativa', t:'"¿Empezamos el día 1 o el 15?"', umbral:66, i:3, c:2, cpt:'tres-opciones',
   fb:'Cambias la pregunta de "sí o no" a "cuándo". Funciona si el interés ya estaba; si no, se nota el truco.'},
- {id:'resumen', t:'Le resumo con sus palabras lo que me ha dicho y pregunto si lo he entendido bien.', umbral:55, i:6, c:8, cpt:'preguntar-antes',
+ {id:'resumen', t:'Le resumo con sus palabras lo que me ha dicho y pregunto si lo he entendido bien.', umbral:61, i:6, c:8, cpt:'preguntar-antes',
   fb:'Cerrar repitiendo su problema con sus palabras. El sí que sigue es suyo, no tuyo.', req:'dolor'},
- {id:'siguiente', t:'"Te propongo un primer paso: {prueba}. Si funciona, seguimos."', umbral:47, i:4, c:9, price:-0.45, prueba:true, cpt:'riesgo-percibido',
+ {id:'siguiente', t:'"Te propongo un primer paso: {prueba}. Si funciona, seguimos."', umbral:50, i:4, c:9, price:-0.45, prueba:true, cpt:'riesgo-percibido',
   fb:'Bajar el tamaño de la decisión en vez del precio. Entras, y el resto se vende solo desde dentro.'},
- {id:'presion', t:'"Necesito una respuesta hoy o pierdes el hueco."', umbral:76, i:8, c:-14, cpt:'riesgo-percibido',
+ {id:'presion', t:'"Necesito una respuesta hoy o pierdes el hueco."', umbral:82, i:8, c:-14, cpt:'riesgo-percibido',
   fb:'La presión funciona con quien ya iba a comprar y quema a todos los demás. Ratio malísimo.'},
- {id:'silencio_cierre', t:'Digo el precio, pregunto y me callo.', umbral:58, i:5, c:6, cpt:'silencio',
+ {id:'silencio_cierre', t:'Digo el precio, pregunto y me callo.', umbral:64, i:5, c:6, cpt:'silencio',
   fb:'Aguantar el silencio después de preguntar es donde se ganan los tratos que parecían perdidos.'},
- {id:'fecha', t:'"Cerramos aquí y quedamos el jueves para arrancar."', umbral:62, i:4, c:5, cita:true, cpt:'siguiente-paso',
+ {id:'fecha', t:'"Cerramos aquí y quedamos el jueves para arrancar."', umbral:68, i:4, c:5, cita:true, cpt:'siguiente-paso',
   fb:'Cierre con calendario. Un sí sin fecha se enfría en cuarenta y ocho horas.'},
  {id:'no_cierro', t:'No pido el sí. Le digo que se lo piense con calma.', umbral:999, i:-12, c:2, cpt:'cerrar-o-perder',
   fb:'Has hecho todo el trabajo y no has pedido el pedido. Esto es, literalmente, lo que más dinero cuesta en ventas.'}
